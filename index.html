@@ -491,6 +491,19 @@
   <div id="history-section" class="history-list"></div>
 
   <script>
+    let usageChartInstance = null;
+    let modelDonutInstance = null;
+    let refreshTimer = null;
+
+    function scheduleRefresh() {
+      cancelRefresh();
+      refreshTimer = setTimeout(() => load(), 30000);
+    }
+
+    function cancelRefresh() {
+      if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null; }
+    }
+
     function applyTheme(theme) {
       document.documentElement.setAttribute('data-theme', theme);
       const btn = document.getElementById('theme-toggle');
@@ -850,6 +863,7 @@
 
         const el = document.getElementById("last-updated");
         if (el) el.textContent = "Last updated: " + new Date().toLocaleTimeString();
+        scheduleRefresh();
       } catch (err) {
         document.body.innerHTML +=
           '<div class="empty-state">Error loading dashboard: ' +
