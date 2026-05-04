@@ -748,6 +748,14 @@
     let usageChartInstance = null;
     let modelDonutInstance = null;
     let refreshTimer = null;
+    
+    // Pagination state
+    const paginationState = {
+      daily: { page: 1, limit: 30 },
+      tools: { page: 1, limit: 20 },
+      projects: { page: 1, limit: 10 },
+      history: { page: 1, limit: 20 },
+    };
 
     function scheduleRefresh() {
       cancelRefresh();
@@ -795,6 +803,55 @@
       const d = document.createElement("div");
       d.textContent = str;
       return d.innerHTML;
+    }
+
+    function renderPagination(containerId, pagination, onPageChangeFn) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      
+      if (pagination.totalPages <= 1) {
+        container.innerHTML = '';
+        return;
+      }
+      
+      const { page, totalPages, total } = pagination;
+      let html = '';
+      
+      // Previous button
+      html += `<button onclick="${onPageChangeFn}(${page - 1})" ${page <= 1 ? 'disabled' : ''}>←</button>`;
+      
+      // Page numbers
+      const maxButtons = 7;
+      let startPage = Math.max(1, page - 3);
+      let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+      
+      if (endPage - startPage < maxButtons - 1) {
+        startPage = Math.max(1, endPage - maxButtons + 1);
+      }
+      
+      if (startPage > 1) {
+        html += `<button onclick="${onPageChangeFn}(1)">1</button>`;
+        if (startPage > 2) html += '<span class="page-info">...</span>';
+      }
+      
+      for (let i = startPage; i <= endPage; i++) {
+        html += `<button class="${i === page ? 'active' : ''}" onclick="${onPageChangeFn}(${i})">${i}</button>`;
+      }
+      
+      if (endPage < totalPages) {
+        if (endPage < totalPages - 1) html += '<span class="page-info">...</span>';
+        html += `<button onclick="${onPageChangeFn}(${totalPages})">${totalPages}</button>`;
+      }
+      
+      // Next button
+      html += `<button onclick="${onPageChangeFn}(${page + 1})" ${page >= totalPages ? 'disabled' : ''}>→</button>`;
+      
+      // Info text
+      const start = (page - 1) * pagination.limit + 1;
+      const end = Math.min(page * pagination.limit, total);
+      html += `<span class="page-info">${start}-${end} of ${total}</span>`;
+      
+      container.innerHTML = html;
     }
 
     function renderStatRows(container, data) {
@@ -942,6 +999,17 @@
           </tr>`;
         })
         .join("");
+      
+      if (costData.pagination) {
+        renderPagination('daily-pagination', costData.pagination, 'loadDailyPage');
+      }
+    }
+    
+    async function loadDailyPage(page) {
+      paginationState.daily.page = page;
+      const costData = await fetch(`/api/daily-costs?page=${page}&limit=${paginationState.daily.limit}`).then(r => r.json());
+      renderDailyCosts(costData);
+      renderUsageChart(costData);
     }
 
     function toggleSection(bodyId, header) {
@@ -962,7 +1030,8 @@
     }
 
     function renderUsageChart(costData) {
-      const days = [...costData.days].reverse(); // chronological order
+      const allDays = costData.allDays || costData.days;
+      const days = [...allDays].reverse(); // chronological order
       const labels = days.map(d => d.date.slice(5)); // MM-DD
       const textColor = getChartTextColor();
       const gridColor = getChartGridColor();
@@ -1165,14 +1234,134 @@
       return cwdPath.split('/').pop() || cwdPath.split('\\').pop() || 'unknown';
     }
 
+    async function openSession(sessionId) {
+      const modal = document.getElementById('session-modal');
+      const body = document.getElementById('modal-body');
+      const title = document.getElementById('modal-title');
+      const meta = document.getElementById('modal-meta');
+
+      modal.classList.add('open');
+      document.body.style.overflow = 'hidden';
+      body.innerHTML = '<div class="modal-loading">Loading session data...</div>';
+      title.textContent = 'Loading...';
+      meta.textContent = '';
+
+      try {
+        const data = await fetch('/api/session/' + encodeURIComponent(sessionId)).then(r => r.json());
+
+        if (data.error) {
+          body.innerHTML = `<div class="modal-loading" style="color:var(--red)">Error: ${escapeHtml(data.error)}</div>`;
+          return;
+        }
+
+        title.textContent = data.name || 'Untitled Session';
+        const project = shortName(data.cwd);
+        meta.innerHTML = `
+          <span>${escapeHtml(project)}</span> · <span>${escapeHtml(data.branch || '—')}</span> ·
+          <span>${data.duration || '—'}</span> ·
+          <span>Created: ${data.createdAt ? data.createdAt.slice(0, 10) : '—'}</span>
+          ${data.codeChanges ? ` · <span style="color:var(--green)">+${data.codeChanges.linesAdded}</span> <span style="color:var(--red)">-${data.codeChanges.linesRemoved}</span>` : ''}
+        `;
+
+        body.innerHTML = renderCostSection(data.cost) + renderTimeline(data.timeline);
+      } catch (err) {
+        body.innerHTML = `<div class="modal-loading" style="color:var(--red)">Failed to load session: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderCostSection(cost) {
+      if (!cost || !cost.models || !Object.keys(cost.models).length) {
+        return '<div class="cost-section"><h3>Cost Breakdown</h3><p style="color:var(--text-muted)">No cost data available</p></div>';
+      }
+
+      const models = Object.entries(cost.models).sort((a, b) => b[1].requests - a[1].requests);
+      const rows = models.map(([model, info]) => `
+        <tr>
+          <td>${escapeHtml(model)}</td>
+          <td>${info.requests}</td>
+          <td>${fmt(info.inputTokens)}</td>
+          <td>${fmt(info.outputTokens)}</td>
+          <td>${fmt(info.cacheReadTokens)}</td>
+          <td>$${info.estimatedCost.toFixed(4)}</td>
+        </tr>
+      `).join('');
+
+      return `<div class="cost-section">
+        <h3>💰 Cost Breakdown</h3>
+        <table>
+          <thead><tr><th>Model</th><th>Req</th><th>Input</th><th>Output</th><th>Cache Read</th><th>Est. Cost</th></tr></thead>
+          <tbody>${rows}
+            <tr class="cost-total">
+              <td>TOTAL</td>
+              <td>${models.reduce((s, [,m]) => s + m.requests, 0)}</td>
+              <td>${fmt(models.reduce((s, [,m]) => s + m.inputTokens, 0))}</td>
+              <td>${fmt(models.reduce((s, [,m]) => s + m.outputTokens, 0))}</td>
+              <td>${fmt(models.reduce((s, [,m]) => s + m.cacheReadTokens, 0))}</td>
+              <td>$${cost.estimatedTotal.toFixed(2)}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="margin-top:8px;font-size:0.75rem;color:var(--text-muted)">Premium Requests: ${cost.premiumRequests}</div>
+      </div>`;
+    }
+
+    function renderTimeline(timeline) {
+      if (!timeline || !timeline.length) {
+        return '<div class="timeline-section"><h3>Timeline</h3><p style="color:var(--text-muted)">No events recorded</p></div>';
+      }
+
+      const entries = timeline.map(e => {
+        const time = e.timestamp ? e.timestamp.slice(11, 16) : '';
+        let icon = '•';
+        let text = '';
+
+        switch (e.type) {
+          case 'user.message':
+            icon = '💬';
+            text = `<span class="detail">${escapeHtml(e.content || '(empty)')}</span>`;
+            break;
+          case 'tool.execution_start':
+            icon = '🔧';
+            text = `<strong>${escapeHtml(e.tool || 'unknown')}</strong>${e.detail ? ` <span class="detail">→ ${escapeHtml(e.detail)}</span>` : ''}`;
+            break;
+          case 'tool.execution_complete':
+            icon = e.success === true ? '✅' : e.success === false ? '❌' : '⬜';
+            text = `<span class="detail">${escapeHtml(e.tool || '')} completed</span>`;
+            break;
+          case 'session.shutdown':
+            icon = '🏁';
+            text = `<span class="detail">Session ended (${e.premiumRequests} premium requests)</span>`;
+            break;
+          default:
+            text = `<span class="detail">${escapeHtml(e.type)}</span>`;
+        }
+
+        return `<div class="timeline-entry">
+          <span class="timeline-time">${time}</span>
+          <span class="timeline-icon">${icon}</span>
+          <span class="timeline-text">${text}</span>
+        </div>`;
+      }).join('');
+
+      return `<div class="timeline-section"><h3>📋 Timeline (${timeline.length} events)</h3><div class="timeline-list">${entries}</div></div>`;
+    }
+
+    function closeModal() {
+      document.getElementById('session-modal').classList.remove('open');
+      document.body.style.overflow = '';
+    }
+
+    function closeModalBackdrop(event) {
+      if (event.target === event.currentTarget) closeModal();
+    }
+
     let currentToolData = null;
 
     function renderTools(toolData) {
       currentToolData = toolData;
       const body = document.getElementById("tools-body");
-      const maxCount = toolData.tools.length
-        ? toolData.tools[0].count
-        : 1;
+      const allTools = toolData.allTools || toolData.tools;
+      const maxCount = allTools.length ? allTools[0].count : 1;
 
       body.innerHTML = toolData.tools
         .map(
@@ -1189,6 +1378,16 @@
           </tr>`
         )
         .join("");
+      
+      if (toolData.pagination) {
+        renderPagination('tools-pagination', toolData.pagination, 'loadToolsPage');
+      }
+    }
+    
+    async function loadToolsPage(page) {
+      paginationState.tools.page = page;
+      const toolData = await fetch(`/api/tool-calls?page=${page}&limit=${paginationState.tools.limit}`).then(r => r.json());
+      renderTools(toolData);
     }
 
     async function loadToolDetails(toolName, row) {
@@ -1233,8 +1432,9 @@
       }
     }
 
-    function renderProjects(projects) {
+    function renderProjects(projectData) {
       const body = document.getElementById("projects-body");
+      const projects = projectData.data || projectData;
       body.innerHTML = projects
         .map(
           (p) => `<tr>
@@ -1245,10 +1445,21 @@
           </tr>`
         )
         .join("");
+      
+      if (projectData.pagination) {
+        renderPagination('projects-pagination', projectData.pagination, 'loadProjectsPage');
+      }
+    }
+    
+    async function loadProjectsPage(page) {
+      paginationState.projects.page = page;
+      const projectData = await fetch(`/api/projects?page=${page}&limit=${paginationState.projects.limit}`).then(r => r.json());
+      renderProjects(projectData);
     }
 
-    function renderHistory(history) {
+    function renderHistory(historyData) {
       const container = document.getElementById("history-section");
+      const history = historyData.data || historyData;
       if (!history.length) {
         container.innerHTML = '<div class="empty-state">No command history found.</div>';
         return;
@@ -1259,11 +1470,22 @@
             `<div class="history-item">${escapeHtml(h.display)}</div>`
         )
         .join("");
+      
+      if (historyData.pagination) {
+        renderPagination('history-pagination', historyData.pagination, 'loadHistoryPage');
+      }
+    }
+    
+    async function loadHistoryPage(page) {
+      paginationState.history.page = page;
+      const historyData = await fetch(`/api/history?page=${page}&limit=${paginationState.history.limit}`).then(r => r.json());
+      renderHistory(historyData);
     }
 
     function exportToolCalls() {
       if (!currentToolData) return;
-      const lines = currentToolData.tools.map(
+      const tools = currentToolData.allTools || currentToolData.tools;
+      const lines = tools.map(
         (t) => `${t.tool}: ${t.count} calls`
       );
       const blob = new Blob([lines.join("\n")], { type: "text/plain" });
@@ -1306,6 +1528,10 @@
           "</div>";
       }
     }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeModal();
+    });
 
     initTheme();
     load();
