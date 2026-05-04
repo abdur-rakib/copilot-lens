@@ -5,6 +5,8 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 const readline = require("readline");
+const { getCLISessions, getCLIDir } = require('./sources/cli');
+const { getVSCodeSessions, getVSCodeUserDataPath } = require('./sources/vscode');
 
 const app = express();
 const PORT = parseInt(process.env.PORT || "3456", 10);
@@ -884,7 +886,103 @@ app.get("/api/activity", async (req, res) => {
   }
 });
 
+// --- Unified multi-source endpoints ---
+
+app.get("/api/sources", (req, res) => {
+  const cliSessions = getCLISessions();
+  const vscodeSessions = getVSCodeSessions();
+  res.json({
+    cli: {
+      enabled: cliSessions.length > 0,
+      sessionCount: cliSessions.length,
+      dataPath: getCLIDir()
+    },
+    vscode: {
+      enabled: vscodeSessions.length > 0,
+      sessionCount: vscodeSessions.length,
+      dataPath: getVSCodeUserDataPath()
+    },
+    totalSessions: cliSessions.length + vscodeSessions.length
+  });
+});
+
+app.get("/api/unified-sessions", (req, res) => {
+  try {
+    const source = req.query.source || 'all';
+    const page = parseInt(req.query.page || "1", 10);
+    const limit = parseInt(req.query.limit || "20", 10);
+
+    let sessions = [];
+    if (source === 'all' || source === 'cli') {
+      sessions = sessions.concat(getCLISessions());
+    }
+    if (source === 'all' || source === 'vscode') {
+      sessions = sessions.concat(getVSCodeSessions());
+    }
+
+    sessions.sort((a, b) => b.startTime - a.startTime);
+
+    const total = sessions.length;
+    const totalPages = Math.ceil(total / limit);
+    const startIdx = (page - 1) * limit;
+    const paginatedSessions = sessions.slice(startIdx, startIdx + limit);
+
+    const cliCount = sessions.filter(s => s.source === 'cli').length;
+    const vscodeCount = sessions.filter(s => s.source === 'vscode').length;
+
+    res.json({
+      data: paginatedSessions,
+      breakdown: { cli: cliCount, vscode: vscodeCount },
+      pagination: { page, limit, total, totalPages }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/unified-stats", (req, res) => {
+  try {
+    const cliSessions = getCLISessions();
+    const vscodeSessions = getVSCodeSessions();
+    const allSessions = [...cliSessions, ...vscodeSessions];
+
+    const totalMessages = allSessions.reduce((sum, s) => sum + s.messageCount, 0);
+    const totalToolCalls = allSessions.reduce((sum, s) => sum + s.toolCallCount, 0);
+    const totalCost = allSessions.reduce((sum, s) => sum + (s.costUsd || 0), 0);
+    const totalPremium = allSessions.reduce((sum, s) => sum + (s.premiumRequests || 0), 0);
+
+    const modelCounts = {};
+    for (const s of allSessions) {
+      for (const m of s.models) {
+        modelCounts[m] = (modelCounts[m] || 0) + 1;
+      }
+    }
+
+    res.json({
+      totalSessions: allSessions.length,
+      totalMessages,
+      totalToolCalls,
+      totalCost: Math.round(totalCost * 100) / 100,
+      totalPremiumRequests: Math.round(totalPremium * 100) / 100,
+      breakdown: {
+        cli: { sessions: cliSessions.length, messages: cliSessions.reduce((s, x) => s + x.messageCount, 0) },
+        vscode: { sessions: vscodeSessions.length, messages: vscodeSessions.reduce((s, x) => s + x.messageCount, 0) }
+      },
+      models: modelCounts
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`copilot-lens running at http://localhost:${PORT}`);
-  console.log(`Reading data from: ${COPILOT_DIR}`);
+  console.log(`CLI data from: ${getCLIDir()}`);
+  const vscodePath = getVSCodeUserDataPath();
+  if (vscodePath) {
+    const vsSessions = getVSCodeSessions();
+    console.log(`VS Code data from: ${vscodePath} (${vsSessions.length} sessions)`);
+  } else {
+    console.log(`VS Code data: not detected`);
+  }
 });
