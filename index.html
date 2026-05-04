@@ -445,7 +445,10 @@
       container.innerHTML = data
         .map(
           (r) =>
-            `<div class="stat-row"><span class="label">${r.label}</span><span class="value ${r.cls || ""}">${r.value}</span></div>`
+            `<div class="stat-row">
+              <span class="label">${r.label}${r.tip ? `<span class="info-icon" data-tip="${r.tip}">i</span>` : ""}</span>
+              <span class="value ${r.cls || ""}">${r.value}</span>
+            </div>`
         )
         .join("");
     }
@@ -494,11 +497,13 @@
           label: "Premium Requests",
           value: todayData.premiumRequests,
           cls: "highlight",
+          tip: "Tracked by Copilot CLI — recorded in session.shutdown events. Not calculated by copilot-lens.",
         },
         {
           label: "Est. Cost",
           value: "$" + todayData.estimatedCost.toFixed(2),
           cls: "orange",
+          tip: "Estimated from token counts × configurable rates (default: AWS Bedrock ap-southeast-2). Not official Copilot billing.",
         },
         { label: "Cache Hit Rate", value: todayHitRate, cls: "green" },
       ]);
@@ -513,11 +518,13 @@
           label: "Premium Requests",
           value: t.premiumRequests,
           cls: "highlight",
+          tip: "Tracked by Copilot CLI — recorded in session.shutdown events. Not calculated by copilot-lens.",
         },
         {
           label: "Est. Cost",
           value: "$" + t.estimatedCost.toFixed(2),
           cls: "orange",
+          tip: "Estimated from token counts × configurable rates (default: AWS Bedrock ap-southeast-2). Not official Copilot billing.",
         },
         { label: "Cache Hit Rate", value: allHitRate, cls: "green" },
       ]);
@@ -528,7 +535,8 @@
     function renderCacheCards(costData) {
       const t = costData.totals;
       const totalInput = t.input + t.cacheRead + t.cacheWrite;
-      const hitRate = totalInput ? ((t.cacheRead / totalInput) * 100).toFixed(1) : "0.0";
+      const hitRateNum = totalInput ? (t.cacheRead / totalInput) * 100 : 0;
+      const hitRate = hitRateNum.toFixed(1);
       const withCache = t.estimatedCost;
       const noCacheCost =
         (t.input + t.cacheRead + t.cacheWrite) * (costData.rates.input / 1e6) +
@@ -536,8 +544,14 @@
       const noCacheRounded = Math.round(noCacheCost * 100) / 100;
       const saved = Math.round((noCacheRounded - withCache) * 100) / 100;
 
-      document.getElementById("cache-cards").innerHTML = [
-        { value: hitRate + "%", label: "Cache Hit Rate" },
+      const ringCard = `<div class="cache-card ring-card">
+        <div class="ring" style="--pct: ${hitRate}">
+          <div class="ring-inner">${hitRate}%</div>
+        </div>
+        <div class="card-label" style="margin-top:8px">Cache Hit Rate</div>
+      </div>`;
+
+      const otherCards = [
         { value: "$" + withCache.toFixed(2), label: "Cost (with cache)" },
         { value: "$" + noCacheRounded.toFixed(2), label: "Cost (no cache)" },
         { value: "$" + Math.max(0, saved).toFixed(2), label: "Savings" },
@@ -547,6 +561,8 @@
             `<div class="cache-card"><div class="card-value">${c.value}</div><div class="card-label">${c.label}</div></div>`
         )
         .join("");
+
+      document.getElementById("cache-cards").innerHTML = ringCard + otherCards;
     }
 
     function renderDailyCosts(costData) {
@@ -567,6 +583,50 @@
             <td>${hitRate}</td>
             <td>${d.premiumRequests}</td>
             <td>$${d.estimatedCost.toFixed(2)}</td>
+          </tr>`;
+        })
+        .join("");
+    }
+
+    function toggleSection(bodyId, header) {
+      const body = document.getElementById(bodyId);
+      const table = body ? body.closest("table") : null;
+      if (!table) return;
+      const hidden = table.style.display === "none";
+      table.style.display = hidden ? "" : "none";
+      header.classList.toggle("collapsed", !hidden);
+    }
+
+    function renderModelBreakdown(stats, rates) {
+      const body = document.getElementById("model-breakdown-body");
+      if (!body) return;
+      const breakdown = stats.modelBreakdown || {};
+      const entries = Object.entries(breakdown).sort(
+        (a, b) => b[1].requests - a[1].requests
+      );
+
+      if (!entries.length) {
+        body.innerHTML =
+          '<tr><td colspan="7" style="color:#8b949e;text-align:center">No model data</td></tr>';
+        return;
+      }
+
+      const r = rates || { input: 5, output: 25, cacheRead: 0.5, cacheCreate: 6.25 };
+      body.innerHTML = entries
+        .map(([model, info]) => {
+          const cost =
+            (info.inputTokens || 0) * (r.input / 1e6) +
+            (info.outputTokens || 0) * (r.output / 1e6) +
+            (info.cacheReadTokens || 0) * (r.cacheRead / 1e6) +
+            (info.cacheWriteTokens || 0) * (r.cacheCreate / 1e6);
+          return `<tr>
+            <td>${escapeHtml(model)}</td>
+            <td>${info.requests || 0}</td>
+            <td>${fmt(info.inputTokens || 0)}</td>
+            <td>${fmt(info.outputTokens || 0)}</td>
+            <td>${fmt(info.cacheReadTokens || 0)}</td>
+            <td>${fmt(info.cacheWriteTokens || 0)}</td>
+            <td>$${cost.toFixed(4)}</td>
           </tr>`;
         })
         .join("");
@@ -693,10 +753,14 @@
 
         renderSummary(costData, stats);
         renderCacheCards(costData);
+        renderModelBreakdown(stats, costData.rates);
         renderDailyCosts(costData);
         renderTools(toolData);
         renderProjects(projects);
         renderHistory(history);
+
+        const el = document.getElementById("last-updated");
+        if (el) el.textContent = "Last updated: " + new Date().toLocaleTimeString();
       } catch (err) {
         document.body.innerHTML +=
           '<div class="empty-state">Error loading dashboard: ' +
