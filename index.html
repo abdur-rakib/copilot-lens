@@ -366,14 +366,50 @@
     }
 
     .section-toggle.collapsed::before { content: "▸ "; }
+
+    /* Chart containers */
+    .chart-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    /* Model breakdown: table + donut side by side */
+    .model-breakdown-layout {
+      display: grid;
+      grid-template-columns: 1fr 240px;
+      gap: 16px;
+      align-items: start;
+      margin-bottom: 16px;
+    }
+
+    /* Theme toggle button */
+    .theme-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 8px;
+      cursor: pointer;
+      font-size: 1rem;
+      line-height: 1;
+    }
+
+    .theme-btn:hover { background: var(--bg-tertiary); }
+
+    @media (max-width: 768px) {
+      .model-breakdown-layout { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
   <h1>🔭 Copilot Lens <span class="subtitle">— GitHub Copilot CLI Usage Dashboard</span></h1>
 
   <div class="refresh-bar">
+    <button class="theme-btn" id="theme-toggle" onclick="toggleTheme()" title="Toggle theme">🌙</button>
     <span id="last-updated">Last updated: —</span>
-    <button class="refresh-btn" onclick="load()">↻ Refresh</button>
+    <button class="refresh-btn" id="refresh-btn" onclick="cancelRefresh(); load()">↻ Refresh</button>
   </div>
 
   <div id="summary-section">
@@ -455,6 +491,28 @@
   <div id="history-section" class="history-list"></div>
 
   <script>
+    function applyTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      const btn = document.getElementById('theme-toggle');
+      if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+      localStorage.setItem('copilot-lens-theme', theme);
+    }
+
+    function initTheme() {
+      const saved = localStorage.getItem('copilot-lens-theme');
+      if (saved) { applyTheme(saved); return; }
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      applyTheme(prefersDark ? 'dark' : 'light');
+    }
+
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme') || 'dark';
+      applyTheme(current === 'dark' ? 'light' : 'dark');
+      if (usageChartInstance) { usageChartInstance.destroy(); usageChartInstance = null; }
+      if (modelDonutInstance) { modelDonutInstance.destroy(); modelDonutInstance = null; }
+      load();
+    }
+
     function fmt(n) {
       if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
       if (n >= 1e3) return (n / 1e3).toFixed(1) + "K";
@@ -800,6 +858,7 @@
       }
     }
 
+    initTheme();
     load();
   </script>
 </body>
