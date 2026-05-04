@@ -205,6 +205,198 @@ app.get("/api/history", (req, res) => {
   }
 });
 
+app.get("/api/daily-costs", async (req, res) => {
+  try {
+    const sessionDirs = getSessionDirs();
+    const daily = {};
+
+    for (const dir of sessionDirs) {
+      const ws = readWorkspace(dir);
+      const events = await parseEventsJsonl(dir, [
+        "session.shutdown",
+        "user.message",
+        "tool.execution_start",
+      ]);
+
+      const sessionDay = ws?.created_at ? ws.created_at.slice(0, 10) : null;
+
+      let messages = 0;
+      let toolCalls = 0;
+
+      for (const event of events) {
+        if (event.type === "user.message") {
+          messages++;
+        } else if (event.type === "tool.execution_start") {
+          toolCalls++;
+        } else if (event.type === "session.shutdown") {
+          const d = event.data || {};
+          const day = event.timestamp
+            ? event.timestamp.slice(0, 10)
+            : sessionDay;
+          if (!day) continue;
+
+          if (!daily[day]) {
+            daily[day] = {
+              date: day,
+              sessions: 0,
+              messages: 0,
+              toolCalls: 0,
+              input: 0,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              reasoningTokens: 0,
+              premiumRequests: 0,
+              models: {},
+            };
+          }
+
+          daily[day].sessions++;
+          daily[day].messages += messages;
+          daily[day].toolCalls += toolCalls;
+          daily[day].premiumRequests += d.totalPremiumRequests || 0;
+
+          const metrics = d.modelMetrics || {};
+          for (const [model, info] of Object.entries(metrics)) {
+            daily[day].models[model] =
+              (daily[day].models[model] || 0) + (info.requests?.count || 0);
+
+            const usage = info.usage || {};
+            daily[day].input += usage.inputTokens || 0;
+            daily[day].output += usage.outputTokens || 0;
+            daily[day].cacheRead += usage.cacheReadTokens || 0;
+            daily[day].cacheWrite += usage.cacheWriteTokens || 0;
+            daily[day].reasoningTokens += usage.reasoningTokens || 0;
+          }
+        }
+      }
+    }
+
+    const days = Object.values(daily)
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .map((d) => {
+        const estimatedCost =
+          d.input * RATES.input +
+          d.output * RATES.output +
+          d.cacheRead * RATES.cacheRead +
+          d.cacheWrite * RATES.cacheCreate;
+        return {
+          ...d,
+          estimatedCost: Math.round(estimatedCost * 100) / 100,
+          premiumRequests: Math.round(d.premiumRequests * 100) / 100,
+        };
+      });
+
+    const totals = days.reduce(
+      (acc, d) => {
+        acc.sessions += d.sessions;
+        acc.messages += d.messages;
+        acc.toolCalls += d.toolCalls;
+        acc.input += d.input;
+        acc.output += d.output;
+        acc.cacheRead += d.cacheRead;
+        acc.cacheWrite += d.cacheWrite;
+        acc.reasoningTokens += d.reasoningTokens;
+        acc.premiumRequests += d.premiumRequests;
+        acc.estimatedCost += d.estimatedCost;
+        for (const [model, count] of Object.entries(d.models || {})) {
+          acc.models[model] = (acc.models[model] || 0) + count;
+        }
+        return acc;
+      },
+      {
+        sessions: 0,
+        messages: 0,
+        toolCalls: 0,
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        reasoningTokens: 0,
+        premiumRequests: 0,
+        estimatedCost: 0,
+        models: {},
+      }
+    );
+    totals.premiumRequests = Math.round(totals.premiumRequests * 100) / 100;
+    totals.estimatedCost = Math.round(totals.estimatedCost * 100) / 100;
+
+    res.json({
+      days,
+      totals,
+      rates: {
+        input: parseFloat(process.env.RATE_INPUT ?? "5.0"),
+        output: parseFloat(process.env.RATE_OUTPUT ?? "25.0"),
+        cacheRead: parseFloat(process.env.RATE_CACHE_READ ?? "0.5"),
+        cacheCreate: parseFloat(process.env.RATE_CACHE_CREATE ?? "6.25"),
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/projects", async (req, res) => {
+  try {
+    const sessionDirs = getSessionDirs();
+    const projects = {};
+
+    for (const dir of sessionDirs) {
+      const ws = readWorkspace(dir);
+      if (!ws || !ws.cwd) continue;
+
+      const fullPath = ws.cwd;
+      const name = shortProjectName(fullPath);
+
+      if (!projects[fullPath]) {
+        projects[fullPath] = {
+          name,
+          fullPath,
+          sessions: 0,
+          premiumRequests: 0,
+          firstSeen: null,
+          lastSeen: null,
+        };
+      }
+
+      projects[fullPath].sessions++;
+
+      const ts = ws.created_at;
+      if (ts) {
+        if (
+          !projects[fullPath].firstSeen ||
+          ts < projects[fullPath].firstSeen
+        ) {
+          projects[fullPath].firstSeen = ts;
+        }
+        if (
+          !projects[fullPath].lastSeen ||
+          ts > projects[fullPath].lastSeen
+        ) {
+          projects[fullPath].lastSeen = ts;
+        }
+      }
+
+      const shutdowns = await parseEventsJsonl(dir, ["session.shutdown"]);
+      for (const event of shutdowns) {
+        projects[fullPath].premiumRequests +=
+          event.data?.totalPremiumRequests || 0;
+      }
+    }
+
+    const result = Object.values(projects)
+      .map((p) => ({
+        ...p,
+        premiumRequests: Math.round(p.premiumRequests * 100) / 100,
+      }))
+      .sort((a, b) => b.sessions - a.sessions);
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`copilot-lens running at http://localhost:${PORT}`);
   console.log(`Reading data from: ${COPILOT_DIR}`);
