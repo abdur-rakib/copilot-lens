@@ -130,13 +130,26 @@ app.get("/api/stats", async (req, res) => {
         const metrics = d.modelMetrics || {};
         for (const [model, info] of Object.entries(metrics)) {
           if (!totals.modelBreakdown[model]) {
-            totals.modelBreakdown[model] = { requests: 0, cost: 0 };
+            totals.modelBreakdown[model] = {
+              requests: 0,
+              cost: 0,
+              inputTokens: 0,
+              outputTokens: 0,
+              cacheReadTokens: 0,
+              cacheWriteTokens: 0,
+              reasoningTokens: 0,
+            };
           }
-          totals.modelBreakdown[model].requests +=
-            info.requests?.count || 0;
+          totals.modelBreakdown[model].requests += info.requests?.count || 0;
           totals.modelBreakdown[model].cost += info.requests?.cost || 0;
 
           const usage = info.usage || {};
+          totals.modelBreakdown[model].inputTokens += usage.inputTokens || 0;
+          totals.modelBreakdown[model].outputTokens += usage.outputTokens || 0;
+          totals.modelBreakdown[model].cacheReadTokens += usage.cacheReadTokens || 0;
+          totals.modelBreakdown[model].cacheWriteTokens += usage.cacheWriteTokens || 0;
+          totals.modelBreakdown[model].reasoningTokens += usage.reasoningTokens || 0;
+
           totals.totalInputTokens += usage.inputTokens || 0;
           totals.totalOutputTokens += usage.outputTokens || 0;
           totals.totalCacheReadTokens += usage.cacheReadTokens || 0;
