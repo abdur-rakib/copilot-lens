@@ -103,7 +103,7 @@
 
     .cache-cards {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(5, 1fr);
       gap: 12px;
       margin-bottom: 16px;
     }
@@ -968,11 +968,6 @@
     <div class="cache-card"><div class="skeleton skeleton-card"></div></div>
   </div>
 
-  <div class="source-chart-container" id="source-chart-container" style="display:none">
-    <canvas id="source-pie" width="60" height="60"></canvas>
-    <div class="source-legend" id="source-legend"></div>
-  </div>
-
   <h2>Model Breakdown</h2>
   <div class="model-breakdown-layout" id="model-breakdown-layout">
     <table id="model-breakdown-table">
@@ -1102,6 +1097,7 @@
       <tr><td colspan="6"><div class="skeleton skeleton-row"></div></td></tr>
     </tbody>
   </table>
+  <div id="sessions-pagination" class="pagination"></div>
 
   <h2>Prompt History</h2>
   <div id="history-section" class="history-list">
@@ -1154,6 +1150,7 @@
       tools: { page: 1, limit: 10 },
       projects: { page: 1, limit: 10 },
       history: { page: 1, limit: 10 },
+      sessions: { page: 1, limit: 10 },
     };
 
     function scheduleRefresh() {
@@ -1344,7 +1341,7 @@
         `<div class="models-list">${topModels(t.models, 3)}</div>`;
     }
 
-    function renderCacheCards(costData) {
+    function renderCacheCards(costData, sourceBreakdown) {
       const t = costData.totals;
       const totalInput = t.input + t.cacheRead + t.cacheWrite;
       const hitRateNum = totalInput ? (t.cacheRead / totalInput) * 100 : 0;
@@ -1361,14 +1358,31 @@
         { value: "$" + withCache.toFixed(2), label: "Cost (with cache)" },
         { value: "$" + noCacheRounded.toFixed(2), label: "Cost (no cache)" },
         { value: "$" + Math.max(0, saved).toFixed(2), label: "Savings" },
-      ]
-        .map(
-          (c) =>
-            `<div class="cache-card"><div class="card-value">${c.value}</div><div class="card-label">${c.label}</div></div>`
-        )
+      ];
+
+      // Add source breakdown card if available
+      if (sourceBreakdown) {
+        const cli = sourceBreakdown.cli || 0;
+        const vscode = sourceBreakdown.vscode || 0;
+        const total = cli + vscode;
+        const cliPct = total > 0 ? ((cli / total) * 100).toFixed(0) : 0;
+        const vscodePct = total > 0 ? ((vscode / total) * 100).toFixed(0) : 0;
+        
+        cards.push({
+          value: `${total}`,
+          label: "Total Sessions",
+          detail: `CLI: ${cli} (${cliPct}%)<br>VS Code: ${vscode} (${vscodePct}%)`
+        });
+      }
+
+      const cardsHtml = cards
+        .map((c) => {
+          const detailHtml = c.detail ? `<div style="font-size: 0.65rem; color: var(--text-muted); margin-top: 4px; line-height: 1.4;">${c.detail}</div>` : '';
+          return `<div class="cache-card"><div class="card-value">${c.value}</div><div class="card-label">${c.label}</div>${detailHtml}</div>`;
+        })
         .join("");
 
-      document.getElementById("cache-cards").innerHTML = cards;
+      document.getElementById("cache-cards").innerHTML = cardsHtml;
     }
 
     function renderDailyCosts(costData) {
@@ -1689,17 +1703,27 @@
         });
       }
 
+      // Pagination
+      const page = paginationState.sessions.page;
+      const limit = paginationState.sessions.limit;
+      const total = filtered.length;
+      const totalPages = Math.ceil(total / limit);
+      const startIdx = (page - 1) * limit;
+      const endIdx = startIdx + limit;
+      const paginatedData = filtered.slice(startIdx, endIdx);
+
       const countEl = document.getElementById('session-result-count');
       if (countEl) {
-        countEl.textContent = query || currentSourceFilter !== 'all' 
+        const showing = query || currentSourceFilter !== 'all' 
           ? `Showing ${filtered.length} of ${sessionsData.length}` 
           : `${sessionsData.length} sessions`;
+        countEl.textContent = showing;
       }
 
       const body = document.getElementById('sessions-body');
       if (!body) return;
 
-      body.innerHTML = filtered.map(s => {
+      body.innerHTML = paginatedData.map(s => {
         const name = s.title || s.name || 'Untitled';
         const project = s.project || shortName(s.cwd);
         const created = s.startTime ? new Date(s.startTime).toISOString().slice(0, 10) : (s.createdAt ? s.createdAt.slice(0, 10) : '—');
@@ -1718,6 +1742,23 @@
           <td>${created}</td>
         </tr>`;
       }).join('');
+
+      // Render pagination
+      if (totalPages > 1) {
+        renderPagination('sessions-pagination', {
+          page,
+          limit,
+          total,
+          totalPages
+        }, 'loadSessionsPage');
+      } else {
+        document.getElementById('sessions-pagination').innerHTML = '';
+      }
+    }
+
+    function loadSessionsPage(page) {
+      paginationState.sessions.page = page;
+      filterSessions();
     }
 
     function renderSourceChart(breakdown) {
@@ -2060,7 +2101,7 @@
           ]);
 
         renderSummary(costData, stats);
-        renderCacheCards(costData);
+        renderCacheCards(costData, sessions.breakdown);
         renderModelBreakdown(stats, costData.rates);
         renderModelDonut(stats);
         renderDailyCosts(costData);
