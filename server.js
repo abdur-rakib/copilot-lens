@@ -21,14 +21,14 @@ const RATES = {
 
 if (!fs.existsSync(COPILOT_DIR)) {
   console.error(
-    `COPILOT_DIR "${COPILOT_DIR}" does not exist. Set COPILOT_DIR in .env or ensure ~/.copilot exists.`
+    `COPILOT_DIR "${COPILOT_DIR}" does not exist. Set COPILOT_DIR in .env or ensure ~/.copilot exists.`,
   );
   process.exit(1);
 }
 
 if (!fs.existsSync(SESSION_STATE_DIR)) {
   console.warn(
-    `Warning: session-state directory not found at "${SESSION_STATE_DIR}". Dashboard will show no data.`
+    `Warning: session-state directory not found at "${SESSION_STATE_DIR}". Dashboard will show no data.`,
   );
 }
 
@@ -146,9 +146,12 @@ app.get("/api/stats", async (req, res) => {
           const usage = info.usage || {};
           totals.modelBreakdown[model].inputTokens += usage.inputTokens || 0;
           totals.modelBreakdown[model].outputTokens += usage.outputTokens || 0;
-          totals.modelBreakdown[model].cacheReadTokens += usage.cacheReadTokens || 0;
-          totals.modelBreakdown[model].cacheWriteTokens += usage.cacheWriteTokens || 0;
-          totals.modelBreakdown[model].reasoningTokens += usage.reasoningTokens || 0;
+          totals.modelBreakdown[model].cacheReadTokens +=
+            usage.cacheReadTokens || 0;
+          totals.modelBreakdown[model].cacheWriteTokens +=
+            usage.cacheWriteTokens || 0;
+          totals.modelBreakdown[model].reasoningTokens +=
+            usage.reasoningTokens || 0;
 
           totals.totalInputTokens += usage.inputTokens || 0;
           totals.totalOutputTokens += usage.outputTokens || 0;
@@ -169,6 +172,8 @@ app.get("/api/stats", async (req, res) => {
 
 app.get("/api/sessions", async (req, res) => {
   try {
+    const page = parseInt(req.query.page || "1", 10);
+    const limit = parseInt(req.query.limit || "10", 10);
     const sessionDirs = getSessionDirs();
     const sessions = [];
 
@@ -192,10 +197,25 @@ app.get("/api/sessions", async (req, res) => {
       });
     }
 
-    sessions.sort(
-      (a, b) => (b.createdAt || "").localeCompare(a.createdAt || "")
+    sessions.sort((a, b) =>
+      (b.createdAt || "").localeCompare(a.createdAt || ""),
     );
-    res.json(sessions);
+
+    const total = sessions.length;
+    const totalPages = Math.ceil(total / limit);
+    const startIdx = (page - 1) * limit;
+    const endIdx = startIdx + limit;
+    const paginatedSessions = sessions.slice(startIdx, endIdx);
+
+    res.json({
+      data: paginatedSessions,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+      },
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -203,16 +223,36 @@ app.get("/api/sessions", async (req, res) => {
 
 app.get("/api/history", (req, res) => {
   try {
+    const page = parseInt(req.query.page || "1", 10);
+    const limit = parseInt(req.query.limit || "10", 10);
     const historyPath = path.join(COPILOT_DIR, "command-history-state.json");
     if (!fs.existsSync(historyPath)) {
-      return res.json([]);
+      return res.json({
+        data: [],
+        pagination: { page: 1, limit, total: 0, totalPages: 0 },
+      });
     }
     const raw = JSON.parse(fs.readFileSync(historyPath, "utf8"));
     const entries = (Array.isArray(raw) ? raw : []).map((item, index) => ({
       display: typeof item === "string" ? item : String(item),
       index,
     }));
-    res.json(entries);
+
+    const total = entries.length;
+    const totalPages = Math.ceil(total / limit);
+    const startIdx = (page - 1) * limit;
+    const endIdx = startIdx + limit;
+    const paginatedEntries = entries.slice(startIdx, endIdx);
+
+    res.json({
+      data: paginatedEntries,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+      },
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -220,6 +260,8 @@ app.get("/api/history", (req, res) => {
 
 app.get("/api/daily-costs", async (req, res) => {
   try {
+    const page = parseInt(req.query.page || "1", 10);
+    const limit = parseInt(req.query.limit || "10", 10);
     const sessionDirs = getSessionDirs();
     const daily = {};
 
@@ -329,19 +371,32 @@ app.get("/api/daily-costs", async (req, res) => {
         premiumRequests: 0,
         estimatedCost: 0,
         models: {},
-      }
+      },
     );
     totals.premiumRequests = Math.round(totals.premiumRequests * 100) / 100;
     totals.estimatedCost = Math.round(totals.estimatedCost * 100) / 100;
 
+    const total = days.length;
+    const totalPages = Math.ceil(total / limit);
+    const startIdx = (page - 1) * limit;
+    const endIdx = startIdx + limit;
+    const paginatedDays = days.slice(startIdx, endIdx);
+
     res.json({
-      days,
+      days: paginatedDays,
+      allDays: days,
       totals,
       rates: {
         input: parseFloat(process.env.RATE_INPUT ?? "5.0"),
         output: parseFloat(process.env.RATE_OUTPUT ?? "25.0"),
         cacheRead: parseFloat(process.env.RATE_CACHE_READ ?? "0.5"),
         cacheCreate: parseFloat(process.env.RATE_CACHE_CREATE ?? "6.25"),
+      },
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
       },
     });
   } catch (err) {
@@ -382,10 +437,7 @@ app.get("/api/projects", async (req, res) => {
         ) {
           projects[fullPath].firstSeen = ts;
         }
-        if (
-          !projects[fullPath].lastSeen ||
-          ts > projects[fullPath].lastSeen
-        ) {
+        if (!projects[fullPath].lastSeen || ts > projects[fullPath].lastSeen) {
           projects[fullPath].lastSeen = ts;
         }
       }
@@ -397,6 +449,9 @@ app.get("/api/projects", async (req, res) => {
       }
     }
 
+    const page = parseInt(req.query.page || "1", 10);
+    const limit = parseInt(req.query.limit || "10", 10);
+
     const result = Object.values(projects)
       .map((p) => ({
         ...p,
@@ -404,7 +459,21 @@ app.get("/api/projects", async (req, res) => {
       }))
       .sort((a, b) => b.sessions - a.sessions);
 
-    res.json(result);
+    const total = result.length;
+    const totalPages = Math.ceil(total / limit);
+    const startIdx = (page - 1) * limit;
+    const endIdx = startIdx + limit;
+    const paginatedResult = result.slice(startIdx, endIdx);
+
+    res.json({
+      data: paginatedResult,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+      },
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -431,11 +500,30 @@ app.get("/api/tool-calls", async (req, res) => {
       }
     }
 
+    const page = parseInt(req.query.page || "1", 10);
+    const limit = parseInt(req.query.limit || "10", 10);
+
     const tools = Object.entries(toolCounts)
       .sort((a, b) => b[1] - a[1])
       .map(([tool, count]) => ({ tool, count }));
 
-    res.json({ tools, byProject: toolsByProject });
+    const total = tools.length;
+    const totalPages = Math.ceil(total / limit);
+    const startIdx = (page - 1) * limit;
+    const endIdx = startIdx + limit;
+    const paginatedTools = tools.slice(startIdx, endIdx);
+
+    res.json({
+      tools: paginatedTools,
+      allTools: tools,
+      byProject: toolsByProject,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+      },
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -457,7 +545,10 @@ app.get("/api/tool-details/:toolName", async (req, res) => {
 
       const completions = {};
       for (const event of events) {
-        if (event.type === "tool.execution_complete" && event.data?.toolCallId) {
+        if (
+          event.type === "tool.execution_complete" &&
+          event.data?.toolCallId
+        ) {
           completions[event.data.toolCallId] = event.data;
         }
       }
@@ -558,9 +649,13 @@ app.get("/api/session/:id", async (req, res) => {
         entry.toolCallId = event.data?.toolCallId || "";
         switch (entry.tool) {
           case "bash":
-            entry.detail = args.command ? args.command.slice(0, 120) : (args.description || "");
+            entry.detail = args.command
+              ? args.command.slice(0, 120)
+              : args.description || "";
             break;
-          case "read": case "edit": case "create":
+          case "read":
+          case "edit":
+          case "create":
             entry.detail = args.path || args.file_path || "";
             break;
           case "grep":
@@ -597,7 +692,14 @@ app.get("/api/session/:id", async (req, res) => {
       const metrics = d.modelMetrics || {};
       for (const [model, info] of Object.entries(metrics)) {
         if (!models[model]) {
-          models[model] = { requests: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 };
+          models[model] = {
+            requests: 0,
+            inputTokens: 0,
+            outputTokens: 0,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0,
+            reasoningTokens: 0,
+          };
         }
         models[model].requests += info.requests?.count || 0;
         const usage = info.usage || {};
@@ -613,14 +715,18 @@ app.get("/api/session/:id", async (req, res) => {
     for (const info of Object.values(models)) {
       info.estimatedCost =
         Math.round(
-          ((info.inputTokens * RATES.input) +
-          (info.outputTokens * RATES.output) +
-          (info.cacheReadTokens * RATES.cacheRead) +
-          (info.cacheWriteTokens * RATES.cacheCreate)) * 10000
+          (info.inputTokens * RATES.input +
+            info.outputTokens * RATES.output +
+            info.cacheReadTokens * RATES.cacheRead +
+            info.cacheWriteTokens * RATES.cacheCreate) *
+            10000,
         ) / 10000;
     }
 
-    const estimatedTotal = Object.values(models).reduce((sum, m) => sum + m.estimatedCost, 0);
+    const estimatedTotal = Object.values(models).reduce(
+      (sum, m) => sum + m.estimatedCost,
+      0,
+    );
 
     // Duration
     let duration = "";
@@ -638,7 +744,10 @@ app.get("/api/session/:id", async (req, res) => {
 
     // Code changes from last shutdown
     const lastShutdown = shutdowns[shutdowns.length - 1]?.data || {};
-    const codeChanges = lastShutdown.codeChanges || { linesAdded: 0, linesRemoved: 0 };
+    const codeChanges = lastShutdown.codeChanges || {
+      linesAdded: 0,
+      linesRemoved: 0,
+    };
 
     res.json({
       id: sessionId,
@@ -655,6 +764,114 @@ app.get("/api/session/:id", async (req, res) => {
         models,
       },
       timeline,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/activity", async (req, res) => {
+  try {
+    const sessionDirs = getSessionDirs();
+    const days = {};
+    const hourly = new Array(24).fill(0);
+    const weekday = { Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0, Sun: 0 };
+    const weekdayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    let totalDuration = 0;
+    let durationCount = 0;
+
+    for (const dir of sessionDirs) {
+      const ws = readWorkspace(dir);
+      if (!ws || !ws.created_at) continue;
+
+      const date = ws.created_at.slice(0, 10);
+      if (!days[date]) {
+        days[date] = { sessions: 0, messages: 0, toolCalls: 0, premiumRequests: 0 };
+      }
+      days[date].sessions++;
+
+      // Hour and weekday
+      const dt = new Date(ws.created_at);
+      if (!isNaN(dt.getTime())) {
+        hourly[dt.getHours()]++;
+        weekday[weekdayNames[dt.getDay()]]++;
+      }
+
+      // Duration
+      if (ws.updated_at) {
+        const ms = new Date(ws.updated_at) - new Date(ws.created_at);
+        if (ms > 0 && ms < 86400000) {
+          totalDuration += ms;
+          durationCount++;
+        }
+      }
+
+      // Messages and tool calls
+      const events = await parseEventsJsonl(dir, [
+        "user.message",
+        "tool.execution_start",
+        "session.shutdown",
+      ]);
+
+      for (const event of events) {
+        if (event.type === "user.message") {
+          days[date].messages++;
+        } else if (event.type === "tool.execution_start") {
+          days[date].toolCalls++;
+        } else if (event.type === "session.shutdown") {
+          days[date].premiumRequests += event.data?.totalPremiumRequests || 0;
+        }
+      }
+    }
+
+    // Compute streaks
+    const today = new Date().toISOString().slice(0, 10);
+    const sortedDates = Object.keys(days).sort();
+    let currentStreak = 0;
+    let longestStreak = 0;
+    let tempStreak = 0;
+
+    // Walk all dates for longest streak
+    if (sortedDates.length > 0) {
+      tempStreak = 1;
+      for (let i = 1; i < sortedDates.length; i++) {
+        const prev = new Date(sortedDates[i - 1]);
+        const curr = new Date(sortedDates[i]);
+        const diffDays = (curr - prev) / 86400000;
+        if (diffDays === 1) {
+          tempStreak++;
+        } else {
+          longestStreak = Math.max(longestStreak, tempStreak);
+          tempStreak = 1;
+        }
+      }
+      longestStreak = Math.max(longestStreak, tempStreak);
+    }
+
+    // Current streak: walk backwards from today
+    const todayDate = new Date(today);
+    let checkDate = new Date(todayDate);
+    while (true) {
+      const key = checkDate.toISOString().slice(0, 10);
+      if (days[key]) {
+        currentStreak++;
+        checkDate.setDate(checkDate.getDate() - 1);
+      } else {
+        break;
+      }
+    }
+
+    const avgSessionMinutes = durationCount > 0
+      ? Math.round(totalDuration / durationCount / 60000)
+      : 0;
+
+    res.json({
+      days,
+      streaks: { current: currentStreak, longest: longestStreak },
+      hourly,
+      weekday,
+      avgSessionMinutes,
+      totalDaysActive: Object.keys(days).length,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
