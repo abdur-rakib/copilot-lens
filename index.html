@@ -1816,14 +1816,14 @@
     function renderHistory(historyData) {
       const container = document.getElementById("history-section");
       const history = historyData.data || historyData;
-      if (!history.length) {
-        container.innerHTML = '<div class="empty-state">No command history found.</div>';
+      if (!history || !Array.isArray(history) || history.length === 0) {
+        container.innerHTML = '<div class="empty-state">No command history found. Start using Copilot CLI to see your command history here.</div>';
         return;
       }
       container.innerHTML = history
         .map(
           (h) =>
-            `<div class="history-item">${escapeHtml(h.display)}</div>`
+            `<div class="history-item">${escapeHtml(h.display || h)}</div>`
         )
         .join("");
       

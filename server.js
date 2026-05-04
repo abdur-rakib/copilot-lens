@@ -233,10 +233,12 @@ app.get("/api/history", (req, res) => {
       });
     }
     const raw = JSON.parse(fs.readFileSync(historyPath, "utf8"));
-    const entries = (Array.isArray(raw) ? raw : []).map((item, index) => ({
-      display: typeof item === "string" ? item : String(item),
-      index,
-    }));
+    const entries = (Array.isArray(raw) ? raw : [])
+      .map((item, index) => ({
+        display: typeof item === "string" ? item : String(item),
+        index,
+      }))
+      .reverse(); // Most recent first
 
     const total = entries.length;
     const totalPages = Math.ceil(total / limit);
@@ -786,7 +788,12 @@ app.get("/api/activity", async (req, res) => {
 
       const date = ws.created_at.slice(0, 10);
       if (!days[date]) {
-        days[date] = { sessions: 0, messages: 0, toolCalls: 0, premiumRequests: 0 };
+        days[date] = {
+          sessions: 0,
+          messages: 0,
+          toolCalls: 0,
+          premiumRequests: 0,
+        };
       }
       days[date].sessions++;
 
@@ -861,9 +868,8 @@ app.get("/api/activity", async (req, res) => {
       }
     }
 
-    const avgSessionMinutes = durationCount > 0
-      ? Math.round(totalDuration / durationCount / 60000)
-      : 0;
+    const avgSessionMinutes =
+      durationCount > 0 ? Math.round(totalDuration / durationCount / 60000) : 0;
 
     res.json({
       days,
