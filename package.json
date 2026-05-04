@@ -2,7 +2,6 @@
   "name": "copilot-lens",
   "version": "1.0.0",
   "description": "Local dashboard for visualizing GitHub Copilot CLI usage statistics",
-  "private": true,
   "bin": {
     "copilot-lens": "server.js"
   },
