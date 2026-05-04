@@ -7,13 +7,30 @@ Inspired by [claude-lens](https://github.com/foyzulkarim/claude-lens).
 
 ## Quick Start
 
+### ⚡ Zero-install (recommended)
+
 ```bash
-# Clone and run
-git clone https://github.com/AiHero-LLC/copilot-lens.git
+npx github:abdur-rakib/copilot-lens
+```
+
+Open **http://localhost:3456** in your browser. That's it — no cloning, no `npm install`.
+
+### 🛠 Manual install
+
+```bash
+git clone https://github.com/abdur-rakib/copilot-lens.git
 cd copilot-lens && npm install && npm start
 ```
 
 Open **http://localhost:3456** in your browser.
+
+### ⚙️ Custom port or Copilot directory
+
+```bash
+PORT=4000 npx github:abdur-rakib/copilot-lens
+# or
+COPILOT_DIR=/custom/path npx github:abdur-rakib/copilot-lens
+```
 
 ## What You'll See
 
