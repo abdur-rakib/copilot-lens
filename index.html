@@ -980,7 +980,12 @@
         <th>Last Active</th>
       </tr>
     </thead>
-    <tbody id="projects-body"><tr><td colspan="4" class="loading">Loading...</td></tr></tbody>
+    <tbody id="projects-body">
+      <tr><td colspan="4"><div class="skeleton skeleton-row"></div></td></tr>
+      <tr><td colspan="4"><div class="skeleton skeleton-row"></div></td></tr>
+      <tr><td colspan="4"><div class="skeleton skeleton-row"></div></td></tr>
+      <tr><td colspan="4"><div class="skeleton skeleton-row"></div></td></tr>
+    </tbody>
   </table>
   <div id="projects-pagination" class="pagination"></div>
 
@@ -999,11 +1004,21 @@
         <th>Created</th>
       </tr>
     </thead>
-    <tbody id="sessions-body"><tr><td colspan="5" class="loading">Loading...</td></tr></tbody>
+    <tbody id="sessions-body">
+      <tr><td colspan="5"><div class="skeleton skeleton-row"></div></td></tr>
+      <tr><td colspan="5"><div class="skeleton skeleton-row"></div></td></tr>
+      <tr><td colspan="5"><div class="skeleton skeleton-row"></div></td></tr>
+      <tr><td colspan="5"><div class="skeleton skeleton-row"></div></td></tr>
+    </tbody>
   </table>
 
   <h2>Prompt History</h2>
-  <div id="history-section" class="history-list"><div class="loading">Loading...</div></div>
+  <div id="history-section" class="history-list">
+    <div class="skeleton skeleton-text" style="width: 90%; margin: 8px 0;"></div>
+    <div class="skeleton skeleton-text" style="width: 85%; margin: 8px 0;"></div>
+    <div class="skeleton skeleton-text" style="width: 95%; margin: 8px 0;"></div>
+    <div class="skeleton skeleton-text" style="width: 80%; margin: 8px 0;"></div>
+  </div>
   <div id="history-pagination" class="pagination"></div>
 
   <!-- Session detail modal -->
@@ -1384,6 +1399,136 @@
         .join("");
     }
 
+    let activityData = null;
+    let heatmapMetric = 'sessions';
+
+    function setHeatmapMetric(metric, btn) {
+      heatmapMetric = metric;
+      document.querySelectorAll('.heatmap-toggle').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      if (activityData) renderHeatmap(activityData);
+    }
+
+    function renderActivity(data) {
+      activityData = data;
+      renderStreakCards(data);
+      renderHeatmap(data);
+      renderProductivity(data);
+    }
+
+    function renderStreakCards(data) {
+      const el = document.getElementById('streak-cards');
+      if (!el) return;
+      el.innerHTML = `
+        <div class="streak-card">
+          <div class="streak-icon">🔥</div>
+          <div class="streak-value">${data.streaks.current}</div>
+          <div class="streak-label">Current Streak (days)</div>
+        </div>
+        <div class="streak-card">
+          <div class="streak-icon">🏆</div>
+          <div class="streak-value">${data.streaks.longest}</div>
+          <div class="streak-label">Longest Streak (days)</div>
+        </div>
+        <div class="streak-card">
+          <div class="streak-icon">📅</div>
+          <div class="streak-value">${data.totalDaysActive}</div>
+          <div class="streak-label">Total Active Days</div>
+        </div>
+      `;
+    }
+
+    function renderHeatmap(data) {
+      const grid = document.getElementById('heatmap-grid');
+      if (!grid) return;
+
+      const today = new Date();
+      const startDate = new Date(today);
+      startDate.setDate(startDate.getDate() - 364);
+      // Adjust to start on Sunday
+      startDate.setDate(startDate.getDate() - startDate.getDay());
+
+      // Compute max for color scaling
+      const values = Object.values(data.days).map(d => d[heatmapMetric] || 0);
+      const maxVal = Math.max(...values, 1);
+
+      // Build cells
+      let html = '';
+      const dayLabels = ['', 'Mon', '', 'Wed', '', 'Fri', ''];
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+      // Month headers (row 1)
+      html += '<div></div>'; // empty top-left corner
+      let lastMonth = -1;
+      for (let week = 0; week < 53; week++) {
+        const weekDate = new Date(startDate);
+        weekDate.setDate(weekDate.getDate() + week * 7);
+        const month = weekDate.getMonth();
+        if (month !== lastMonth) {
+          html += `<div class="heatmap-month">${months[month]}</div>`;
+          lastMonth = month;
+        } else {
+          html += '<div></div>';
+        }
+      }
+
+      // Day rows
+      for (let day = 0; day < 7; day++) {
+        html += `<div class="heatmap-day-label">${dayLabels[day]}</div>`;
+        for (let week = 0; week < 53; week++) {
+          const cellDate = new Date(startDate);
+          cellDate.setDate(cellDate.getDate() + week * 7 + day);
+
+          if (cellDate > today) {
+            html += '<div></div>';
+            continue;
+          }
+
+          const key = cellDate.toISOString().slice(0, 10);
+          const val = data.days[key] ? (data.days[key][heatmapMetric] || 0) : 0;
+          const level = val === 0 ? 0 : val <= maxVal * 0.25 ? 1 : val <= maxVal * 0.5 ? 2 : val <= maxVal * 0.75 ? 3 : 4;
+          const dateStr = cellDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          const tooltip = `${dateStr}: ${val} ${heatmapMetric}`;
+
+          html += `<div class="heatmap-cell" data-level="${level}" data-tooltip="${tooltip}"></div>`;
+        }
+      }
+
+      grid.innerHTML = html;
+    }
+
+    function renderProductivity(data) {
+      const el = document.getElementById('productivity-cards');
+      if (!el) return;
+
+      // Peak hour
+      const peakHour = data.hourly.indexOf(Math.max(...data.hourly));
+      const peakLabel = peakHour === 0 ? '12 AM' : peakHour < 12 ? peakHour + ' AM' : peakHour === 12 ? '12 PM' : (peakHour - 12) + ' PM';
+
+      // Busiest day
+      const busiestDay = Object.entries(data.weekday).sort((a, b) => b[1] - a[1])[0];
+
+      // Hourly bars
+      const maxH = Math.max(...data.hourly, 1);
+      const bars = data.hourly.map(h => `<div class="hourly-bar" style="height:${Math.max(1, (h / maxH) * 24)}px" title="${h} sessions"></div>`).join('');
+
+      el.innerHTML = `
+        <div class="productivity-card">
+          <div class="prod-value">${peakLabel}</div>
+          <div class="prod-label">Peak Hour</div>
+          <div class="hourly-bars">${bars}</div>
+        </div>
+        <div class="productivity-card">
+          <div class="prod-value">${busiestDay ? busiestDay[0] : '—'}</div>
+          <div class="prod-label">Busiest Day (${busiestDay ? busiestDay[1] : 0} sessions)</div>
+        </div>
+        <div class="productivity-card">
+          <div class="prod-value">${data.avgSessionMinutes}m</div>
+          <div class="prod-label">Avg Session Length</div>
+        </div>
+      `;
+    }
+
     let sessionsData = [];
 
     function renderSessions(sessions) {
@@ -1690,7 +1835,7 @@
 
     async function load() {
       try {
-        const [stats, history, toolData, projects, costData, sessions] =
+        const [stats, history, toolData, projects, costData, sessions, activity] =
           await Promise.all([
             fetch("/api/stats").then((r) => r.json()),
             fetch(`/api/history?page=${paginationState.history.page}&limit=${paginationState.history.limit}`).then((r) => r.json()),
@@ -1698,6 +1843,7 @@
             fetch(`/api/projects?page=${paginationState.projects.page}&limit=${paginationState.projects.limit}`).then((r) => r.json()),
             fetch(`/api/daily-costs?page=${paginationState.daily.page}&limit=${paginationState.daily.limit}`).then((r) => r.json()),
             fetch("/api/sessions").then((r) => r.json()),
+            fetch("/api/activity").then((r) => r.json()),
           ]);
 
         renderSummary(costData, stats);
@@ -1709,6 +1855,7 @@
         renderProjects(projects);
         renderHistory(history);
         renderSessions(sessions.data || sessions);
+        renderActivity(activity);
 
         const el = document.getElementById("last-updated");
         if (el) el.textContent = "Last updated: " + new Date().toLocaleTimeString();
