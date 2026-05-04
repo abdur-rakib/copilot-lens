@@ -340,6 +340,11 @@
 <body>
   <h1>🔭 Copilot Lens <span class="subtitle">— GitHub Copilot CLI Usage Dashboard</span></h1>
 
+  <div class="refresh-bar">
+    <span id="last-updated">Last updated: —</span>
+    <button class="refresh-btn" onclick="load()">↻ Refresh</button>
+  </div>
+
   <div id="summary-section">
     <div class="summary-grid">
       <div class="summary-panel" id="today-panel">
@@ -354,6 +359,22 @@
   </div>
 
   <div id="cache-cards" class="cache-cards"></div>
+
+  <h2 class="section-toggle" onclick="toggleSection('model-breakdown-body', this)">Model Breakdown</h2>
+  <table id="model-breakdown-table">
+    <thead>
+      <tr>
+        <th>Model</th>
+        <th>Requests</th>
+        <th>Input Tokens</th>
+        <th>Output Tokens</th>
+        <th>Cache Read</th>
+        <th>Cache Write</th>
+        <th>Est. Cost</th>
+      </tr>
+    </thead>
+    <tbody id="model-breakdown-body"></tbody>
+  </table>
 
   <h2>Daily Breakdown</h2>
   <div id="daily-costs">
