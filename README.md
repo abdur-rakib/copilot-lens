@@ -33,16 +33,32 @@ PORT=4000 npx github:abdur-rakib/copilot-lens
 COPILOT_DIR=/custom/path npx github:abdur-rakib/copilot-lens
 ```
 
+## Features
+
+- 📊 **Charts & Visualization** — Line chart for daily trends, donut chart for model distribution
+- 🌗 **Dark/Light Theme** — Toggle with system detection, persisted in localStorage
+- 🔄 **Auto-Refresh** — Dashboard updates every 30 seconds
+- 🔥 **Streaks & Heatmap** — GitHub-style contribution grid (toggleable: sessions/messages/tool calls/premium req)
+- ⏱️ **Productivity Insights** — Peak hours, busiest weekday, average session length
+- 🔍 **Session Drill-down** — Click any session to see full timeline + per-model cost breakdown
+- 🔎 **Session Search** — Filter sessions by name, project, or branch
+- 💰 **Cost Estimation** — Per-model token breakdown with configurable rates
+- 🛡️ **Privacy-first** — All data stays local, no external calls
+
 ## What You'll See
 
-| Section              | Description                                                 |
-| -------------------- | ----------------------------------------------------------- |
-| **Today / All-Time** | Sessions, messages, tool calls, premium requests, est. cost |
-| **Cache Analytics**  | Hit rate, cost with/without cache, total savings            |
-| **Daily Breakdown**  | Per-day table of all metrics                                |
-| **Tool Analytics**   | Bar chart of tool usage with drill-down details             |
-| **Projects**         | Activity grouped by repository                              |
-| **Command History**  | Recent Copilot CLI commands                                 |
+| Section                  | Description                                                      |
+| ------------------------ | ---------------------------------------------------------------- |
+| **Today / All-Time**     | Sessions, messages, tool calls, premium requests, est. cost      |
+| **Cache Analytics**      | Hit rate ring, cost with/without cache, total savings            |
+| **Model Breakdown**      | Per-model token table + donut chart                              |
+| **Daily Breakdown**      | Per-day table of all metrics                                     |
+| **Usage Trends**         | Line chart — sessions, messages, tool calls over time            |
+| **Activity & Streaks**   | 🔥 Streak counters, GitHub-style contribution heatmap, productivity insights |
+| **Sessions**             | Searchable session list with click-to-drill-down modal           |
+| **Tool Analytics**       | Bar chart of tool usage with drill-down details                  |
+| **Projects**             | Activity grouped by repository                                   |
+| **Command History**      | Recent Copilot CLI commands                                      |
 
 ## Configuration
 
@@ -142,22 +158,24 @@ cost = (inputTokens      × RATE_INPUT / 1,000,000)
 
 Two files:
 
-- `server.js` — Express API server (7 endpoints)
-- `index.html` — Single-page dashboard (HTML + CSS + JS)
+- `server.js` — Express API server (9 endpoints)
+- `index.html` — Single-page dashboard (HTML + CSS + JS, Chart.js via CDN)
 
 Dependencies: `express`, `dotenv` — that's it.
 
 ## API Endpoints
 
-| Endpoint                          | Returns                                |
-| --------------------------------- | -------------------------------------- |
-| `GET /api/stats`                  | Aggregate statistics                   |
-| `GET /api/sessions`               | Session list with metadata             |
-| `GET /api/history`                | Command history                        |
-| `GET /api/daily-costs`            | Per-day breakdown with token/cost data |
-| `GET /api/projects`               | Project-level aggregation              |
-| `GET /api/tool-calls`             | Tool usage counts                      |
-| `GET /api/tool-details/:toolName` | Detailed calls for a specific tool     |
+| Endpoint                          | Returns                                         |
+| --------------------------------- | ----------------------------------------------- |
+| `GET /api/stats`                  | Aggregate statistics + per-model breakdown      |
+| `GET /api/sessions`               | Session list with metadata                      |
+| `GET /api/session/:id`            | Full session detail (timeline + cost breakdown) |
+| `GET /api/history`                | Command history                                 |
+| `GET /api/daily-costs`            | Per-day breakdown with token/cost data          |
+| `GET /api/projects`               | Project-level aggregation                       |
+| `GET /api/tool-calls`             | Tool usage counts                               |
+| `GET /api/tool-details/:toolName` | Detailed calls for a specific tool              |
+| `GET /api/activity`               | Streaks, heatmap data, hourly/weekday stats     |
 
 ## License
 
