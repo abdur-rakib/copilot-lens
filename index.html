@@ -256,6 +256,13 @@
 
     .export-btn:hover { background: var(--border); }
 
+    .loading {
+      color: var(--text-muted);
+      text-align: center;
+      padding: 12px;
+      font-size: 0.85rem;
+    }
+
     @media (max-width: 768px) {
       .summary-grid { grid-template-columns: 1fr; }
       .cache-cards { grid-template-columns: repeat(2, 1fr); }
@@ -607,6 +614,168 @@
       padding: 40px;
       color: var(--text-muted);
     }
+
+    /* Activity & Streaks section */
+    .streak-cards {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .streak-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 20px;
+      text-align: center;
+      flex: 1;
+    }
+
+    .streak-card .streak-icon { font-size: 1.5rem; }
+
+    .streak-card .streak-value {
+      font-size: 1.8rem;
+      font-weight: bold;
+      color: var(--accent);
+    }
+
+    .streak-card .streak-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* Heatmap */
+    .heatmap-container {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+      overflow-x: auto;
+    }
+
+    .heatmap-toggles {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .heatmap-toggle {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 10px;
+      font-size: 0.72rem;
+      font-family: inherit;
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+
+    .heatmap-toggle.active {
+      background: var(--accent-dark);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    .heatmap-grid {
+      display: grid;
+      grid-template-columns: 30px repeat(53, 12px);
+      grid-template-rows: 20px repeat(7, 12px);
+      gap: 2px;
+      align-items: center;
+    }
+
+    .heatmap-month {
+      font-size: 0.6rem;
+      color: var(--text-muted);
+      text-align: center;
+      grid-row: 1;
+    }
+
+    .heatmap-day-label {
+      font-size: 0.6rem;
+      color: var(--text-muted);
+      text-align: right;
+      padding-right: 4px;
+    }
+
+    .heatmap-cell {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+      background: var(--bg-tertiary);
+      position: relative;
+    }
+
+    .heatmap-cell[data-level="1"] { background: color-mix(in srgb, var(--accent) 25%, var(--bg-tertiary)); }
+    .heatmap-cell[data-level="2"] { background: color-mix(in srgb, var(--accent) 50%, var(--bg-tertiary)); }
+    .heatmap-cell[data-level="3"] { background: color-mix(in srgb, var(--accent) 75%, var(--bg-tertiary)); }
+    .heatmap-cell[data-level="4"] { background: var(--accent); }
+
+    .heatmap-cell:hover::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 0.65rem;
+      white-space: nowrap;
+      z-index: 10;
+      color: var(--text);
+    }
+
+    /* Productivity insights */
+    .productivity-cards {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .productivity-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      flex: 1;
+      text-align: center;
+    }
+
+    .productivity-card .prod-value {
+      font-size: 1.2rem;
+      font-weight: bold;
+      color: var(--text);
+    }
+
+    .productivity-card .prod-label {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .hourly-bars {
+      display: flex;
+      align-items: flex-end;
+      gap: 1px;
+      height: 24px;
+      margin-top: 8px;
+    }
+
+    .hourly-bar {
+      flex: 1;
+      background: var(--accent);
+      border-radius: 1px 1px 0 0;
+      min-width: 3px;
+      opacity: 0.7;
+    }
+
+    @media (max-width: 768px) {
+      .streak-cards, .productivity-cards { flex-direction: column; }
+    }
   </style>
 </head>
 <body>
@@ -622,18 +791,26 @@
     <div class="summary-grid">
       <div class="summary-panel" id="today-panel">
         <h3>Today</h3>
-        <div id="today-stats"></div>
+        <div id="today-stats" class="loading">Loading...</div>
       </div>
       <div class="summary-panel" id="alltime-panel">
         <h3>All Time</h3>
-        <div id="alltime-stats"></div>
+        <div id="alltime-stats" class="loading">Loading...</div>
       </div>
     </div>
   </div>
 
-  <div id="cache-cards" class="cache-cards"></div>
+  <div id="cache-cards" class="cache-cards"><div style="text-align: center; padding: 20px; color: var(--text-muted);">Loading...</div></div>
 
-  <h2 class="section-toggle" onclick="toggleSection('model-breakdown-body', this)">Model Breakdown</h2>
+  <div class="summary-panel" style="margin-bottom: 16px;">
+    <h3>💰 Cost Calculation Info</h3>
+    <div style="font-size: 0.85rem; line-height: 1.6; color: var(--text-muted);">
+      <p style="margin-bottom: 8px;"><strong style="color: var(--accent);">Premium Requests:</strong> Tracked by Copilot CLI in session.shutdown events. Different models consume different weights (e.g., opus ~3, sonnet ~1, gpt ~0 per call).</p>
+      <p><strong style="color: var(--orange);">Estimated Cost:</strong> Calculated from token counts × rates (Input: $5/1M, Output: $25/1M, Cache Read: $0.5/1M, Cache Write: $6.25/1M). Default rates reflect AWS Bedrock ap-southeast-2 pricing. <em>Not official GitHub Copilot billing.</em></p>
+    </div>
+  </div>
+
+  <h2>Model Breakdown</h2>
   <div class="model-breakdown-layout" id="model-breakdown-layout">
     <table id="model-breakdown-table">
       <thead>
@@ -647,7 +824,7 @@
           <th>Est. Cost</th>
         </tr>
       </thead>
-      <tbody id="model-breakdown-body"></tbody>
+      <tbody id="model-breakdown-body"><tr><td colspan="7" class="loading">Loading...</td></tr></tbody>
     </table>
     <div class="chart-card" style="text-align:center">
       <canvas id="model-donut" width="200" height="200"></canvas>
@@ -670,14 +847,9 @@
           <th>Est. Cost</th>
         </tr>
       </thead>
-      <tbody id="daily-body"></tbody>
+      <tbody id="daily-body"><tr><td colspan="9" class="loading">Loading...</td></tr></tbody>
     </table>
     <div id="daily-pagination" class="pagination"></div>
-  </div>
-
-  <h2>Usage Trends</h2>
-  <div class="chart-card">
-    <canvas id="usage-chart" height="120"></canvas>
   </div>
 
   <h2>Tool Call Analytics <button class="export-btn" onclick="exportToolCalls()">Export</button></h2>
@@ -688,7 +860,7 @@
         <th>Usage</th>
       </tr>
     </thead>
-    <tbody id="tools-body"></tbody>
+    <tbody id="tools-body"><tr><td colspan="2" class="loading">Loading...</td></tr></tbody>
   </table>
   <div id="tools-pagination" class="pagination"></div>
 
@@ -702,7 +874,7 @@
         <th>Last Active</th>
       </tr>
     </thead>
-    <tbody id="projects-body"></tbody>
+    <tbody id="projects-body"><tr><td colspan="4" class="loading">Loading...</td></tr></tbody>
   </table>
   <div id="projects-pagination" class="pagination"></div>
 
@@ -721,11 +893,11 @@
         <th>Created</th>
       </tr>
     </thead>
-    <tbody id="sessions-body"></tbody>
+    <tbody id="sessions-body"><tr><td colspan="5" class="loading">Loading...</td></tr></tbody>
   </table>
 
   <h2>Prompt History</h2>
-  <div id="history-section" class="history-list"></div>
+  <div id="history-section" class="history-list"><div class="loading">Loading...</div></div>
   <div id="history-pagination" class="pagination"></div>
 
   <!-- Session detail modal -->
@@ -745,16 +917,15 @@
   </div>
 
   <script>
-    let usageChartInstance = null;
     let modelDonutInstance = null;
     let refreshTimer = null;
     
     // Pagination state
     const paginationState = {
-      daily: { page: 1, limit: 30 },
-      tools: { page: 1, limit: 20 },
+      daily: { page: 1, limit: 10 },
+      tools: { page: 1, limit: 10 },
       projects: { page: 1, limit: 10 },
-      history: { page: 1, limit: 20 },
+      history: { page: 1, limit: 10 },
     };
 
     function scheduleRefresh() {
@@ -783,7 +954,6 @@
     function toggleTheme() {
       const current = document.documentElement.getAttribute('data-theme') || 'dark';
       applyTheme(current === 'dark' ? 'light' : 'dark');
-      if (usageChartInstance) { usageChartInstance.destroy(); usageChartInstance = null; }
       if (modelDonutInstance) { modelDonutInstance.destroy(); modelDonutInstance = null; }
       load();
     }
@@ -879,7 +1049,8 @@
 
     function renderSummary(costData, stats) {
       const today = new Date().toISOString().slice(0, 10);
-      const todayData = costData.days.find((d) => d.date === today) || {
+      const allDays = costData.allDays || costData.days;
+      const todayData = allDays.find((d) => d.date === today) || {
         sessions: 0,
         messages: 0,
         toolCalls: 0,
@@ -957,14 +1128,8 @@
       const noCacheRounded = Math.round(noCacheCost * 100) / 100;
       const saved = Math.round((noCacheRounded - withCache) * 100) / 100;
 
-      const ringCard = `<div class="cache-card ring-card">
-        <div class="ring" style="--pct: ${hitRate}">
-          <div class="ring-inner">${hitRate}%</div>
-        </div>
-        <div class="card-label" style="margin-top:8px">Cache Hit Rate</div>
-      </div>`;
-
-      const otherCards = [
+      const cards = [
+        { value: hitRate + "%", label: "Cache Hit Rate" },
         { value: "$" + withCache.toFixed(2), label: "Cost (with cache)" },
         { value: "$" + noCacheRounded.toFixed(2), label: "Cost (no cache)" },
         { value: "$" + Math.max(0, saved).toFixed(2), label: "Savings" },
@@ -975,7 +1140,7 @@
         )
         .join("");
 
-      document.getElementById("cache-cards").innerHTML = ringCard + otherCards;
+      document.getElementById("cache-cards").innerHTML = cards;
     }
 
     function renderDailyCosts(costData) {
@@ -1009,7 +1174,6 @@
       paginationState.daily.page = page;
       const costData = await fetch(`/api/daily-costs?page=${page}&limit=${paginationState.daily.limit}`).then(r => r.json());
       renderDailyCosts(costData);
-      renderUsageChart(costData);
     }
 
     function toggleSection(bodyId, header) {
@@ -1027,83 +1191,6 @@
 
     function getChartGridColor() {
       return getComputedStyle(document.documentElement).getPropertyValue('--bg-tertiary').trim() || '#21262d';
-    }
-
-    function renderUsageChart(costData) {
-      const allDays = costData.allDays || costData.days;
-      const days = [...allDays].reverse(); // chronological order
-      const labels = days.map(d => d.date.slice(5)); // MM-DD
-      const textColor = getChartTextColor();
-      const gridColor = getChartGridColor();
-
-      if (usageChartInstance) { usageChartInstance.destroy(); usageChartInstance = null; }
-
-      const ctx = document.getElementById('usage-chart');
-      if (!ctx) return;
-
-      usageChartInstance = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels,
-          datasets: [
-            {
-              label: 'Sessions',
-              data: days.map(d => d.sessions),
-              borderColor: '#58a6ff',
-              backgroundColor: 'rgba(88,166,255,0.1)',
-              tension: 0.3,
-              yAxisID: 'y',
-              pointRadius: 3,
-            },
-            {
-              label: 'Messages',
-              data: days.map(d => d.messages),
-              borderColor: '#3fb950',
-              backgroundColor: 'rgba(63,185,80,0.1)',
-              tension: 0.3,
-              yAxisID: 'y1',
-              pointRadius: 3,
-            },
-            {
-              label: 'Tool Calls',
-              data: days.map(d => d.toolCalls),
-              borderColor: '#d29922',
-              backgroundColor: 'rgba(210,153,34,0.1)',
-              tension: 0.3,
-              yAxisID: 'y1',
-              pointRadius: 3,
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          interaction: { mode: 'index', intersect: false },
-          plugins: {
-            legend: {
-              position: 'top',
-              labels: { color: textColor, font: { size: 11 }, boxWidth: 12 },
-            },
-          },
-          scales: {
-            x: {
-              ticks: { color: textColor, font: { size: 10 } },
-              grid: { color: gridColor },
-            },
-            y: {
-              position: 'left',
-              title: { display: true, text: 'Sessions', color: textColor, font: { size: 10 } },
-              ticks: { color: textColor, font: { size: 10 } },
-              grid: { color: gridColor },
-            },
-            y1: {
-              position: 'right',
-              title: { display: true, text: 'Messages / Tool Calls', color: textColor, font: { size: 10 } },
-              ticks: { color: textColor, font: { size: 10 } },
-              grid: { drawOnChartArea: false },
-            },
-          },
-        },
-      });
     }
 
     function modelColor(name) {
@@ -1500,10 +1587,10 @@
         const [stats, history, toolData, projects, costData, sessions] =
           await Promise.all([
             fetch("/api/stats").then((r) => r.json()),
-            fetch("/api/history").then((r) => r.json()),
-            fetch("/api/tool-calls").then((r) => r.json()),
-            fetch("/api/projects").then((r) => r.json()),
-            fetch("/api/daily-costs").then((r) => r.json()),
+            fetch(`/api/history?page=${paginationState.history.page}&limit=${paginationState.history.limit}`).then((r) => r.json()),
+            fetch(`/api/tool-calls?page=${paginationState.tools.page}&limit=${paginationState.tools.limit}`).then((r) => r.json()),
+            fetch(`/api/projects?page=${paginationState.projects.page}&limit=${paginationState.projects.limit}`).then((r) => r.json()),
+            fetch(`/api/daily-costs?page=${paginationState.daily.page}&limit=${paginationState.daily.limit}`).then((r) => r.json()),
             fetch("/api/sessions").then((r) => r.json()),
           ]);
 
@@ -1511,12 +1598,11 @@
         renderCacheCards(costData);
         renderModelBreakdown(stats, costData.rates);
         renderModelDonut(stats);
-        renderUsageChart(costData);
         renderDailyCosts(costData);
         renderTools(toolData);
         renderProjects(projects);
         renderHistory(history);
-        renderSessions(sessions);
+        renderSessions(sessions.data || sessions);
 
         const el = document.getElementById("last-updated");
         if (el) el.textContent = "Last updated: " + new Date().toLocaleTimeString();
