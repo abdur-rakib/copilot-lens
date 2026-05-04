@@ -263,6 +263,36 @@
       font-size: 0.85rem;
     }
 
+    /* Skeleton Loading */
+    .skeleton {
+      background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--bg-hover) 50%, var(--bg-tertiary) 75%);
+      background-size: 200% 100%;
+      animation: loading 1.5s ease-in-out infinite;
+      border-radius: 4px;
+    }
+
+    @keyframes loading {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    .skeleton-text {
+      height: 14px;
+      margin: 8px 0;
+      border-radius: 4px;
+    }
+
+    .skeleton-row {
+      height: 40px;
+      margin: 4px 0;
+      border-radius: 4px;
+    }
+
+    .skeleton-card {
+      height: 80px;
+      border-radius: 8px;
+    }
+
     @media (max-width: 768px) {
       .summary-grid { grid-template-columns: 1fr; }
       .cache-cards { grid-template-columns: repeat(2, 1fr); }
@@ -304,6 +334,45 @@
     }
 
     .info-icon:hover::after { display: block; }
+
+    /* Cost Info Tooltip */
+    .cost-info-icon {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      line-height: 18px;
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      cursor: help;
+      position: relative;
+      margin-left: 6px;
+      vertical-align: middle;
+      background: var(--bg-tertiary);
+    }
+
+    .cost-info-icon::after {
+      content: attr(data-tip);
+      position: absolute;
+      left: 24px;
+      top: -8px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: 0.75rem;
+      color: var(--text);
+      white-space: pre-wrap;
+      width: 380px;
+      z-index: 100;
+      display: none;
+      line-height: 1.6;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    .cost-info-icon:hover::after { display: block; }
 
     /* Progress ring */
     .ring-card {
@@ -791,23 +860,32 @@
     <div class="summary-grid">
       <div class="summary-panel" id="today-panel">
         <h3>Today</h3>
-        <div id="today-stats" class="loading">Loading...</div>
+        <div id="today-stats">
+          <div class="skeleton skeleton-text" style="width: 80%;"></div>
+          <div class="skeleton skeleton-text" style="width: 60%;"></div>
+          <div class="skeleton skeleton-text" style="width: 90%;"></div>
+          <div class="skeleton skeleton-text" style="width: 70%;"></div>
+        </div>
       </div>
       <div class="summary-panel" id="alltime-panel">
-        <h3>All Time</h3>
-        <div id="alltime-stats" class="loading">Loading...</div>
+        <h3>All Time 
+          <span class="cost-info-icon" data-tip="💰 Cost Calculation Info&#10;&#10;Premium Requests: Tracked by Copilot CLI in session.shutdown events. Different models consume different weights (e.g., opus ~3, sonnet ~1, gpt ~0 per call).&#10;&#10;Estimated Cost: Calculated from token counts × rates (Input: $5/1M, Output: $25/1M, Cache Read: $0.5/1M, Cache Write: $6.25/1M). Default rates reflect AWS Bedrock ap-southeast-2 pricing. Not official GitHub Copilot billing.">ⓘ</span>
+        </h3>
+        <div id="alltime-stats">
+          <div class="skeleton skeleton-text" style="width: 80%;"></div>
+          <div class="skeleton skeleton-text" style="width: 60%;"></div>
+          <div class="skeleton skeleton-text" style="width: 90%;"></div>
+          <div class="skeleton skeleton-text" style="width: 70%;"></div>
+        </div>
       </div>
     </div>
   </div>
 
-  <div id="cache-cards" class="cache-cards"><div style="text-align: center; padding: 20px; color: var(--text-muted);">Loading...</div></div>
-
-  <div class="summary-panel" style="margin-bottom: 16px;">
-    <h3>💰 Cost Calculation Info</h3>
-    <div style="font-size: 0.85rem; line-height: 1.6; color: var(--text-muted);">
-      <p style="margin-bottom: 8px;"><strong style="color: var(--accent);">Premium Requests:</strong> Tracked by Copilot CLI in session.shutdown events. Different models consume different weights (e.g., opus ~3, sonnet ~1, gpt ~0 per call).</p>
-      <p><strong style="color: var(--orange);">Estimated Cost:</strong> Calculated from token counts × rates (Input: $5/1M, Output: $25/1M, Cache Read: $0.5/1M, Cache Write: $6.25/1M). Default rates reflect AWS Bedrock ap-southeast-2 pricing. <em>Not official GitHub Copilot billing.</em></p>
-    </div>
+  <div id="cache-cards" class="cache-cards">
+    <div class="cache-card"><div class="skeleton skeleton-card"></div></div>
+    <div class="cache-card"><div class="skeleton skeleton-card"></div></div>
+    <div class="cache-card"><div class="skeleton skeleton-card"></div></div>
+    <div class="cache-card"><div class="skeleton skeleton-card"></div></div>
   </div>
 
   <h2>Model Breakdown</h2>
@@ -824,7 +902,11 @@
           <th>Est. Cost</th>
         </tr>
       </thead>
-      <tbody id="model-breakdown-body"><tr><td colspan="7" class="loading">Loading...</td></tr></tbody>
+      <tbody id="model-breakdown-body">
+        <tr><td colspan="7"><div class="skeleton skeleton-row"></div></td></tr>
+        <tr><td colspan="7"><div class="skeleton skeleton-row"></div></td></tr>
+        <tr><td colspan="7"><div class="skeleton skeleton-row"></div></td></tr>
+      </tbody>
     </table>
     <div class="chart-card" style="text-align:center">
       <canvas id="model-donut" width="200" height="200"></canvas>
@@ -847,10 +929,29 @@
           <th>Est. Cost</th>
         </tr>
       </thead>
-      <tbody id="daily-body"><tr><td colspan="9" class="loading">Loading...</td></tr></tbody>
+      <tbody id="daily-body">
+        <tr><td colspan="9"><div class="skeleton skeleton-row"></div></td></tr>
+        <tr><td colspan="9"><div class="skeleton skeleton-row"></div></td></tr>
+        <tr><td colspan="9"><div class="skeleton skeleton-row"></div></td></tr>
+        <tr><td colspan="9"><div class="skeleton skeleton-row"></div></td></tr>
+        <tr><td colspan="9"><div class="skeleton skeleton-row"></div></td></tr>
+      </tbody>
     </table>
     <div id="daily-pagination" class="pagination"></div>
   </div>
+
+  <h2>Activity & Streaks</h2>
+  <div class="streak-cards" id="streak-cards"></div>
+  <div class="heatmap-container">
+    <div class="heatmap-toggles">
+      <button class="heatmap-toggle active" onclick="setHeatmapMetric('sessions', this)">Sessions</button>
+      <button class="heatmap-toggle" onclick="setHeatmapMetric('messages', this)">Messages</button>
+      <button class="heatmap-toggle" onclick="setHeatmapMetric('toolCalls', this)">Tool Calls</button>
+      <button class="heatmap-toggle" onclick="setHeatmapMetric('premiumRequests', this)">Premium Req</button>
+    </div>
+    <div class="heatmap-grid" id="heatmap-grid"></div>
+  </div>
+  <div class="productivity-cards" id="productivity-cards"></div>
 
   <h2>Tool Call Analytics <button class="export-btn" onclick="exportToolCalls()">Export</button></h2>
   <table id="tool-calls-table">
@@ -860,7 +961,12 @@
         <th>Usage</th>
       </tr>
     </thead>
-    <tbody id="tools-body"><tr><td colspan="2" class="loading">Loading...</td></tr></tbody>
+    <tbody id="tools-body">
+      <tr><td colspan="2"><div class="skeleton skeleton-row"></div></td></tr>
+      <tr><td colspan="2"><div class="skeleton skeleton-row"></div></td></tr>
+      <tr><td colspan="2"><div class="skeleton skeleton-row"></div></td></tr>
+      <tr><td colspan="2"><div class="skeleton skeleton-row"></div></td></tr>
+    </tbody>
   </table>
   <div id="tools-pagination" class="pagination"></div>
 
