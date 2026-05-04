@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Copilot Lens — Usage Dashboard</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      background: #0d1117;
+      color: #c9d1d9;
+      padding: 24px;
+      line-height: 1.6;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      color: #58a6ff;
+      margin-bottom: 8px;
+    }
+
+    h1 .subtitle {
+      font-size: 0.85rem;
+      color: #8b949e;
+      font-weight: normal;
+    }
+
+    h2 {
+      font-size: 1.1rem;
+      color: #c9d1d9;
+      margin: 24px 0 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #21262d;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .summary-panel {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .summary-panel h3 {
+      font-size: 0.9rem;
+      color: #8b949e;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      font-size: 0.85rem;
+    }
+
+    .stat-row .label { color: #8b949e; }
+    .stat-row .value { color: #c9d1d9; font-weight: 600; }
+    .stat-row .value.highlight { color: #58a6ff; }
+    .stat-row .value.green { color: #3fb950; }
+    .stat-row .value.orange { color: #d29922; }
+
+    .cache-cards {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .cache-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 14px;
+      text-align: center;
+    }
+
+    .cache-card .card-value {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #58a6ff;
+    }
+
+    .cache-card .card-label {
+      font-size: 0.75rem;
+      color: #8b949e;
+      margin-top: 4px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 16px;
+      font-size: 0.8rem;
+    }
+
+    th {
+      background: #21262d;
+      color: #8b949e;
+      font-weight: 600;
+      text-align: left;
+      padding: 10px 12px;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    td {
+      padding: 8px 12px;
+      border-top: 1px solid #21262d;
+      color: #c9d1d9;
+    }
+
+    tr:hover td { background: #1c2128; }
+
+    .bar-cell {
+      position: relative;
+      padding-right: 60px;
+    }
+
+    .bar {
+      height: 20px;
+      background: #1f6feb;
+      border-radius: 3px;
+      min-width: 2px;
+    }
+
+    .bar-count {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 0.8rem;
+      color: #8b949e;
+    }
+
+    .tool-row { cursor: pointer; }
+    .tool-row:hover td { background: #1c2128; }
+
+    .tool-detail {
+      display: none;
+      background: #0d1117;
+    }
+
+    .tool-detail td {
+      padding: 6px 12px 6px 32px;
+      font-size: 0.75rem;
+      color: #8b949e;
+    }
+
+    .success-badge {
+      display: inline-block;
+      width: 16px;
+      text-align: center;
+    }
+
+    .success-badge.pass { color: #3fb950; }
+    .success-badge.fail { color: #f85149; }
+
+    .history-list {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 12px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .history-item {
+      padding: 6px 8px;
+      font-size: 0.8rem;
+      border-bottom: 1px solid #21262d;
+      color: #c9d1d9;
+    }
+
+    .history-item:last-child { border-bottom: none; }
+
+    .models-list {
+      margin-top: 8px;
+      font-size: 0.8rem;
+    }
+
+    .model-badge {
+      display: inline-block;
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 2px 8px;
+      margin: 2px 4px 2px 0;
+      font-size: 0.7rem;
+      color: #8b949e;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 48px 24px;
+      color: #8b949e;
+      font-size: 0.9rem;
+    }
+
+    .export-btn {
+      background: #21262d;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-family: inherit;
+      font-size: 0.75rem;
+      cursor: pointer;
+    }
+
+    .export-btn:hover { background: #30363d; }
+
+    @media (max-width: 768px) {
+      .summary-grid { grid-template-columns: 1fr; }
+      .cache-cards { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <h1>🔭 Copilot Lens <span class="subtitle">— GitHub Copilot CLI Usage Dashboard</span></h1>
+
+  <div id="summary-section">
+    <div class="summary-grid">
+      <div class="summary-panel" id="today-panel">
+        <h3>Today</h3>
+        <div id="today-stats"></div>
+      </div>
+      <div class="summary-panel" id="alltime-panel">
+        <h3>All Time</h3>
+        <div id="alltime-stats"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="cache-cards" class="cache-cards"></div>
+
+  <h2>Daily Breakdown</h2>
+  <div id="daily-costs">
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Sessions</th>
+          <th>Messages</th>
+          <th>Tool Calls</th>
+          <th>Cache Read</th>
+          <th>Cache Write</th>
+          <th>Hit Rate</th>
+          <th>Premium Req</th>
+          <th>Est. Cost</th>
+        </tr>
+      </thead>
+      <tbody id="daily-body"></tbody>
+    </table>
+  </div>
+
+  <h2>Tool Call Analytics <button class="export-btn" onclick="exportToolCalls()">Export</button></h2>
+  <table id="tool-calls-table">
+    <thead>
+      <tr>
+        <th>Tool</th>
+        <th>Usage</th>
+      </tr>
+    </thead>
+    <tbody id="tools-body"></tbody>
+  </table>
+
+  <h2>Project Activity</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Project</th>
+        <th>Sessions</th>
+        <th>Premium Req</th>
+        <th>Last Active</th>
+      </tr>
+    </thead>
+    <tbody id="projects-body"></tbody>
+  </table>
+
+  <h2>Prompt History</h2>
+  <div id="history-section" class="history-list"></div>
+
+  <script>
+    // JavaScript will be added in Task 7
+  </script>
+</body>
+</html>
