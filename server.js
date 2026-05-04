@@ -397,6 +397,119 @@ app.get("/api/projects", async (req, res) => {
   }
 });
 
+app.get("/api/tool-calls", async (req, res) => {
+  try {
+    const sessionDirs = getSessionDirs();
+    const toolCounts = {};
+    const toolsByProject = {};
+
+    for (const dir of sessionDirs) {
+      const ws = readWorkspace(dir);
+      const project = shortProjectName(ws?.cwd);
+      const events = await parseEventsJsonl(dir, ["tool.execution_start"]);
+
+      for (const event of events) {
+        const toolName = event.data?.toolName || event.data?.tool || "unknown";
+        toolCounts[toolName] = (toolCounts[toolName] || 0) + 1;
+
+        if (!toolsByProject[project]) toolsByProject[project] = {};
+        toolsByProject[project][toolName] =
+          (toolsByProject[project][toolName] || 0) + 1;
+      }
+    }
+
+    const tools = Object.entries(toolCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([tool, count]) => ({ tool, count }));
+
+    res.json({ tools, byProject: toolsByProject });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/tool-details/:toolName", async (req, res) => {
+  try {
+    const targetTool = req.params.toolName;
+    const sessionDirs = getSessionDirs();
+    const calls = [];
+
+    for (const dir of sessionDirs) {
+      const ws = readWorkspace(dir);
+      const project = shortProjectName(ws?.cwd);
+      const events = await parseEventsJsonl(dir, [
+        "tool.execution_start",
+        "tool.execution_complete",
+      ]);
+
+      const completions = {};
+      for (const event of events) {
+        if (event.type === "tool.execution_complete" && event.data?.toolCallId) {
+          completions[event.data.toolCallId] = event.data;
+        }
+      }
+
+      for (const event of events) {
+        if (event.type !== "tool.execution_start") continue;
+        const toolName = event.data?.toolName || event.data?.tool || "unknown";
+        if (toolName !== targetTool) continue;
+
+        const args = event.data?.arguments || {};
+        const completion = completions[event.data?.toolCallId] || {};
+
+        let extracted;
+        switch (toolName) {
+          case "bash":
+            extracted = {
+              command: args.command,
+              description: args.description,
+            };
+            break;
+          case "read":
+          case "edit":
+          case "create":
+            extracted = { path: args.path || args.file_path };
+            break;
+          case "grep":
+            extracted = {
+              pattern: args.pattern,
+              paths: args.paths,
+              glob: args.glob,
+            };
+            break;
+          case "glob":
+            extracted = { pattern: args.pattern, paths: args.paths };
+            break;
+          case "task":
+            extracted = {
+              description: args.description,
+              agent_type: args.agent_type,
+            };
+            break;
+          default:
+            extracted = {
+              input: JSON.stringify(args).slice(0, 200),
+            };
+        }
+
+        calls.push({
+          tool: toolName,
+          project,
+          timestamp: event.timestamp || "",
+          arguments: extracted,
+          success: completion.success ?? null,
+          model: completion.model || "",
+        });
+      }
+    }
+
+    calls.sort((a, b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
+    res.json(calls.slice(0, 500));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`copilot-lens running at http://localhost:${PORT}`);
   console.log(`Reading data from: ${COPILOT_DIR}`);
