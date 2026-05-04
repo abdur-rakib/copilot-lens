@@ -58,15 +58,83 @@ Copy `.env.example` to `.env` to customise:
 
 Default rates reflect **AWS Bedrock cross-region (ap-southeast-2)** pricing.
 
+> ⚠️ These rates are estimates. They do not reflect your actual GitHub Copilot subscription cost. Adjust to match your actual cloud provider pricing tier.
+
 ## How It Works
 
-copilot-lens reads data from `~/.copilot/session-state/`:
+copilot-lens reads data directly from `~/.copilot/session-state/`:
 
-- **`workspace.yaml`** — Session metadata (project, branch, timestamps)
-- **`events.jsonl`** — Event stream with token counts, tool calls, and `session.shutdown` analytics
-- **`command-history-state.json`** — CLI command history
+### Data Sources
+
+```
+~/.copilot/session-state/<uuid>/
+  ├── workspace.yaml              → project name, branch, cwd, timestamps
+  ├── events.jsonl                → token counts, tool calls, premium requests
+  │     event types used:
+  │       session.shutdown        → aggregated token/cost/request totals
+  │       user.message            → message count per session
+  │       tool.execution_start    → tool call count + arguments
+  │       tool.execution_complete → success/failure status per tool call
+  └── (session.db — SQLite conversation store, not read by copilot-lens)
+
+~/.copilot/command-history-state.json → CLI command history (string array)
+```
+
+### Example: `session.shutdown` event
+
+This is the key analytics event — written by Copilot CLI at the end of every session:
+
+```json
+{
+  "type": "session.shutdown",
+  "timestamp": "2026-05-04T10:23:45.000Z",
+  "data": {
+    "totalPremiumRequests": 3.67,
+    "totalApiDurationMs": 45230,
+    "modelMetrics": {
+      "claude-sonnet-4.6": {
+        "requests": { "count": 12, "cost": 0.42 },
+        "usage": {
+          "inputTokens": 18420,
+          "outputTokens": 3210,
+          "cacheReadTokens": 62000,
+          "cacheWriteTokens": 9800,
+          "reasoningTokens": 0
+        }
+      }
+    },
+    "codeChanges": { "linesAdded": 84, "linesRemoved": 12, "filesModified": 3 }
+  }
+}
+```
 
 All processing happens locally. No data is sent anywhere.
+
+## How Costs Are Calculated
+
+### Premium Requests
+
+Premium requests are **recorded by Copilot CLI itself** — not calculated by copilot-lens.
+Each session ends with a `session.shutdown` event containing `totalPremiumRequests` (a float).
+copilot-lens sums these values across all sessions.
+
+Different models consume different premium request weights:
+- `claude-opus-4.x` ≈ 3 premium requests per API call
+- `claude-sonnet-4.x` ≈ 1 premium request per API call
+- `gpt-4.1` ≈ 0 premium requests (included in base plan)
+
+### Estimated USD Cost
+
+USD cost is an **estimate** computed from raw token counts × configurable per-token rates:
+
+```
+cost = (inputTokens      × RATE_INPUT / 1,000,000)
+     + (outputTokens     × RATE_OUTPUT / 1,000,000)
+     + (cacheReadTokens  × RATE_CACHE_READ / 1,000,000)
+     + (cacheWriteTokens × RATE_CACHE_CREATE / 1,000,000)
+```
+
+> ⚠️ This is **not** your actual GitHub Copilot subscription cost — it is an approximation for awareness based on underlying model API pricing. Override rates in `.env` to match your actual cloud provider.
 
 ## Architecture
 
