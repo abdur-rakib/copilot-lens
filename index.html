@@ -1041,6 +1041,22 @@
     </div>
   </div>
 
+  <!-- Tool detail modal -->
+  <div class="modal-backdrop" id="tool-modal" onclick="closeToolModalBackdrop(event)">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h2 id="tool-modal-title">Tool Details</h2>
+          <div class="meta" id="tool-modal-meta"></div>
+        </div>
+        <button class="modal-close" onclick="closeToolModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="tool-modal-body">
+        <div class="modal-loading">Loading...</div>
+      </div>
+    </div>
+  </div>
+
   <script>
     let modelDonutInstance = null;
     let refreshTimer = null;
@@ -1711,6 +1727,14 @@
       if (event.target === event.currentTarget) closeModal();
     }
 
+    function closeToolModal() {
+      document.getElementById('tool-modal').classList.remove('open');
+    }
+
+    function closeToolModalBackdrop(event) {
+      if (event.target === event.currentTarget) closeToolModal();
+    }
+
     let currentToolData = null;
 
     function renderTools(toolData) {
@@ -1722,15 +1746,12 @@
       body.innerHTML = toolData.tools
         .map(
           (t) => `
-          <tr class="tool-row" onclick="loadToolDetails('${escapeHtml(t.tool)}', this)">
+          <tr class="tool-row" onclick="openToolDetails('${escapeHtml(t.tool)}')">
             <td>${escapeHtml(t.tool)}</td>
             <td class="bar-cell">
               <div class="bar" style="width: ${(t.count / maxCount) * 100}%"></div>
               <span class="bar-count">${t.count}</span>
             </td>
-          </tr>
-          <tr class="tool-detail" id="detail-${escapeHtml(t.tool)}">
-            <td colspan="2" id="detail-content-${escapeHtml(t.tool)}">Loading...</td>
           </tr>`
         )
         .join("");
@@ -1746,45 +1767,66 @@
       renderTools(toolData);
     }
 
-    async function loadToolDetails(toolName, row) {
-      const detailRow = document.getElementById("detail-" + toolName);
-      if (!detailRow) return;
+    async function openToolDetails(toolName) {
+      const modal = document.getElementById('tool-modal');
+      const titleEl = document.getElementById('tool-modal-title');
+      const metaEl = document.getElementById('tool-modal-meta');
+      const bodyEl = document.getElementById('tool-modal-body');
 
-      const isVisible = detailRow.style.display === "table-row";
-      detailRow.style.display = isVisible ? "none" : "table-row";
-      if (isVisible) return;
-
-      const contentCell = document.getElementById("detail-content-" + toolName);
-      contentCell.textContent = "Loading...";
+      titleEl.textContent = `Tool: ${toolName}`;
+      metaEl.textContent = 'Loading usage details...';
+      bodyEl.innerHTML = '<div class="modal-loading">Loading...</div>';
+      modal.classList.add('open');
 
       try {
         const calls = await fetch("/api/tool-details/" + encodeURIComponent(toolName)).then((r) => r.json());
+        
         if (!calls.length) {
-          contentCell.textContent = "No details available.";
+          bodyEl.innerHTML = '<div class="empty-state">No usage details available.</div>';
+          metaEl.textContent = 'No data found';
           return;
         }
 
-        contentCell.innerHTML = calls
-          .slice(0, 200)
-          .map((c) => {
-            const badge = c.success === true
-              ? '<span class="success-badge pass">✓</span>'
-              : c.success === false
-                ? '<span class="success-badge fail">✗</span>'
-                : '<span class="success-badge">—</span>';
-            const args = Object.entries(c.arguments || {})
-              .filter(([, v]) => v != null)
-              .map(([k, v]) => `${k}: ${escapeHtml(String(v))}`)
-              .join(" | ");
-            return `<div style="padding:4px 0;border-bottom:1px solid #21262d">
-              ${badge} <span style="color:#8b949e">${escapeHtml(c.timestamp?.slice(0, 19) || "")}</span>
-              <span style="color:#58a6ff">${escapeHtml(c.project)}</span>
-              ${args ? `<br><span style="color:#c9d1d9;padding-left:24px">${args}</span>` : ""}
-            </div>`;
-          })
-          .join("");
-      } catch {
-        contentCell.textContent = "Error loading details.";
+        metaEl.textContent = `Total calls: ${calls.length}`;
+
+        const tableHtml = `
+          <div style="overflow-y: auto; max-height: calc(85vh - 120px);">
+            <table style="font-size: 0.85rem;">
+              <thead>
+                <tr>
+                  <th style="width: 50px;">Status</th>
+                  <th style="width: 140px;">Timestamp</th>
+                  <th style="width: 120px;">Project</th>
+                  <th>Arguments</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${calls.map((c) => {
+                  const badge = c.success === true
+                    ? '<span class="success-badge pass" style="font-size: 1.2rem;">✓</span>'
+                    : c.success === false
+                      ? '<span class="success-badge fail" style="font-size: 1.2rem;">✗</span>'
+                      : '<span class="success-badge" style="font-size: 1rem;">—</span>';
+                  const args = Object.entries(c.arguments || {})
+                    .filter(([, v]) => v != null)
+                    .map(([k, v]) => `<strong>${k}:</strong> ${escapeHtml(String(v))}`)
+                    .join('<br>');
+                  return `<tr>
+                    <td style="text-align: center;">${badge}</td>
+                    <td style="color: var(--text-muted); font-size: 0.75rem;">${escapeHtml(c.timestamp?.slice(0, 19) || "—")}</td>
+                    <td style="color: var(--accent);">${escapeHtml(c.project || "—")}</td>
+                    <td style="color: var(--text); line-height: 1.6;">${args || "—"}</td>
+                  </tr>`;
+                }).join("")}
+              </tbody>
+            </table>
+          </div>
+        `;
+        
+        bodyEl.innerHTML = tableHtml;
+      } catch (err) {
+        bodyEl.innerHTML = '<div class="empty-state">Error loading tool details.</div>';
+        metaEl.textContent = 'Error';
       }
     }
 
@@ -1887,7 +1929,10 @@
     }
 
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') closeModal();
+      if (e.key === 'Escape') {
+        closeModal();
+        closeToolModal();
+      }
     });
 
     initTheme();
