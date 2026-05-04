@@ -402,6 +402,48 @@
       .model-breakdown-layout { grid-template-columns: 1fr; }
     }
 
+    /* Pagination styles */
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin: 16px 0;
+      font-size: 0.8rem;
+    }
+
+    .pagination button {
+      background: var(--bg-tertiary);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 10px;
+      font-family: inherit;
+      font-size: 0.75rem;
+      cursor: pointer;
+      min-width: 32px;
+    }
+
+    .pagination button:hover:not(:disabled) {
+      background: var(--border);
+    }
+
+    .pagination button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .pagination button.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    .pagination .page-info {
+      color: var(--text-muted);
+      margin: 0 8px;
+    }
+
     /* Session search */
     .session-search {
       display: flex;
@@ -630,6 +672,7 @@
       </thead>
       <tbody id="daily-body"></tbody>
     </table>
+    <div id="daily-pagination" class="pagination"></div>
   </div>
 
   <h2>Usage Trends</h2>
@@ -647,6 +690,7 @@
     </thead>
     <tbody id="tools-body"></tbody>
   </table>
+  <div id="tools-pagination" class="pagination"></div>
 
   <h2>Project Activity</h2>
   <table>
@@ -660,6 +704,7 @@
     </thead>
     <tbody id="projects-body"></tbody>
   </table>
+  <div id="projects-pagination" class="pagination"></div>
 
   <h2>Sessions</h2>
   <div class="session-search">
@@ -681,6 +726,7 @@
 
   <h2>Prompt History</h2>
   <div id="history-section" class="history-list"></div>
+  <div id="history-pagination" class="pagination"></div>
 
   <!-- Session detail modal -->
   <div class="modal-backdrop" id="session-modal" onclick="closeModalBackdrop(event)">
@@ -1076,6 +1122,49 @@
         .join("");
     }
 
+    let sessionsData = [];
+
+    function renderSessions(sessions) {
+      sessionsData = sessions;
+      filterSessions();
+    }
+
+    function filterSessions() {
+      const query = (document.getElementById('session-search-input')?.value || '').toLowerCase();
+      const filtered = sessionsData.filter(s => {
+        if (!query) return true;
+        const name = (s.name || '').toLowerCase();
+        const project = (s.cwd || '').toLowerCase();
+        const branch = (s.branch || '').toLowerCase();
+        return name.includes(query) || project.includes(query) || branch.includes(query);
+      });
+
+      const countEl = document.getElementById('session-result-count');
+      if (countEl) {
+        countEl.textContent = query ? `Showing ${filtered.length} of ${sessionsData.length}` : `${sessionsData.length} sessions`;
+      }
+
+      const body = document.getElementById('sessions-body');
+      if (!body) return;
+
+      body.innerHTML = filtered.map(s => {
+        const project = shortName(s.cwd);
+        const created = s.createdAt ? s.createdAt.slice(0, 10) : '—';
+        return `<tr class="session-row" onclick="openSession('${escapeHtml(s.id)}')">
+          <td title="${escapeHtml(s.name)}">${escapeHtml((s.name || 'Untitled').slice(0, 50))}</td>
+          <td title="${escapeHtml(s.cwd)}">${escapeHtml(project)}</td>
+          <td>${escapeHtml(s.branch || '—')}</td>
+          <td>${s.premiumRequests || 0}</td>
+          <td>${created}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    function shortName(cwdPath) {
+      if (!cwdPath) return 'unknown';
+      return cwdPath.split('/').pop() || cwdPath.split('\\').pop() || 'unknown';
+    }
+
     let currentToolData = null;
 
     function renderTools(toolData) {
@@ -1186,13 +1275,14 @@
 
     async function load() {
       try {
-        const [stats, history, toolData, projects, costData] =
+        const [stats, history, toolData, projects, costData, sessions] =
           await Promise.all([
             fetch("/api/stats").then((r) => r.json()),
             fetch("/api/history").then((r) => r.json()),
             fetch("/api/tool-calls").then((r) => r.json()),
             fetch("/api/projects").then((r) => r.json()),
             fetch("/api/daily-costs").then((r) => r.json()),
+            fetch("/api/sessions").then((r) => r.json()),
           ]);
 
         renderSummary(costData, stats);
@@ -1204,6 +1294,7 @@
         renderTools(toolData);
         renderProjects(projects);
         renderHistory(history);
+        renderSessions(sessions);
 
         const el = document.getElementById("last-updated");
         if (el) el.textContent = "Last updated: " + new Date().toLocaleTimeString();
