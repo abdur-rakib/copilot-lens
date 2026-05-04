@@ -297,7 +297,288 @@
   <div id="history-section" class="history-list"></div>
 
   <script>
-    // JavaScript will be added in Task 7
+    function fmt(n) {
+      if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
+      if (n >= 1e3) return (n / 1e3).toFixed(1) + "K";
+      return n.toLocaleString();
+    }
+
+    function pct(num, denom) {
+      if (!denom) return "0.0%";
+      return ((num / denom) * 100).toFixed(1) + "%";
+    }
+
+    function escapeHtml(str) {
+      const d = document.createElement("div");
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
+    function renderStatRows(container, data) {
+      container.innerHTML = data
+        .map(
+          (r) =>
+            `<div class="stat-row"><span class="label">${r.label}</span><span class="value ${r.cls || ""}">${r.value}</span></div>`
+        )
+        .join("");
+    }
+
+    function topModels(models, n) {
+      return Object.entries(models || {})
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, n)
+        .map(
+          ([m, c]) =>
+            `<span class="model-badge">${escapeHtml(m)} (${c})</span>`
+        )
+        .join("");
+    }
+
+    function renderSummary(costData, stats) {
+      const today = new Date().toISOString().slice(0, 10);
+      const todayData = costData.days.find((d) => d.date === today) || {
+        sessions: 0,
+        messages: 0,
+        toolCalls: 0,
+        premiumRequests: 0,
+        estimatedCost: 0,
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        models: {},
+      };
+      const t = costData.totals;
+
+      const todayHitRate = pct(
+        todayData.cacheRead,
+        todayData.input + todayData.cacheRead + todayData.cacheWrite
+      );
+      const allHitRate = pct(
+        t.cacheRead,
+        t.input + t.cacheRead + t.cacheWrite
+      );
+
+      renderStatRows(document.getElementById("today-stats"), [
+        { label: "Sessions", value: todayData.sessions },
+        { label: "Messages", value: todayData.messages },
+        { label: "Tool Calls", value: todayData.toolCalls },
+        {
+          label: "Premium Requests",
+          value: todayData.premiumRequests,
+          cls: "highlight",
+        },
+        {
+          label: "Est. Cost",
+          value: "$" + todayData.estimatedCost.toFixed(2),
+          cls: "orange",
+        },
+        { label: "Cache Hit Rate", value: todayHitRate, cls: "green" },
+      ]);
+      document.getElementById("today-stats").innerHTML +=
+        `<div class="models-list">${topModels(todayData.models, 3)}</div>`;
+
+      renderStatRows(document.getElementById("alltime-stats"), [
+        { label: "Sessions", value: t.sessions },
+        { label: "Messages", value: t.messages },
+        { label: "Tool Calls", value: t.toolCalls },
+        {
+          label: "Premium Requests",
+          value: t.premiumRequests,
+          cls: "highlight",
+        },
+        {
+          label: "Est. Cost",
+          value: "$" + t.estimatedCost.toFixed(2),
+          cls: "orange",
+        },
+        { label: "Cache Hit Rate", value: allHitRate, cls: "green" },
+      ]);
+      document.getElementById("alltime-stats").innerHTML +=
+        `<div class="models-list">${topModels(t.models, 3)}</div>`;
+    }
+
+    function renderCacheCards(costData) {
+      const t = costData.totals;
+      const totalInput = t.input + t.cacheRead + t.cacheWrite;
+      const hitRate = totalInput ? ((t.cacheRead / totalInput) * 100).toFixed(1) : "0.0";
+      const withCache = t.estimatedCost;
+      const noCacheCost =
+        (t.input + t.cacheRead + t.cacheWrite) * (costData.rates.input / 1e6) +
+        t.output * (costData.rates.output / 1e6);
+      const noCacheRounded = Math.round(noCacheCost * 100) / 100;
+      const saved = Math.round((noCacheRounded - withCache) * 100) / 100;
+
+      document.getElementById("cache-cards").innerHTML = [
+        { value: hitRate + "%", label: "Cache Hit Rate" },
+        { value: "$" + withCache.toFixed(2), label: "Cost (with cache)" },
+        { value: "$" + noCacheRounded.toFixed(2), label: "Cost (no cache)" },
+        { value: "$" + Math.max(0, saved).toFixed(2), label: "Savings" },
+      ]
+        .map(
+          (c) =>
+            `<div class="cache-card"><div class="card-value">${c.value}</div><div class="card-label">${c.label}</div></div>`
+        )
+        .join("");
+    }
+
+    function renderDailyCosts(costData) {
+      const body = document.getElementById("daily-body");
+      body.innerHTML = costData.days
+        .map((d) => {
+          const totalInput = d.input + d.cacheRead + d.cacheWrite;
+          const hitRate = totalInput
+            ? ((d.cacheRead / totalInput) * 100).toFixed(1) + "%"
+            : "—";
+          return `<tr>
+            <td>${d.date}</td>
+            <td>${d.sessions}</td>
+            <td>${d.messages}</td>
+            <td>${d.toolCalls}</td>
+            <td>${fmt(d.cacheRead)}</td>
+            <td>${fmt(d.cacheWrite)}</td>
+            <td>${hitRate}</td>
+            <td>${d.premiumRequests}</td>
+            <td>$${d.estimatedCost.toFixed(2)}</td>
+          </tr>`;
+        })
+        .join("");
+    }
+
+    let currentToolData = null;
+
+    function renderTools(toolData) {
+      currentToolData = toolData;
+      const body = document.getElementById("tools-body");
+      const maxCount = toolData.tools.length
+        ? toolData.tools[0].count
+        : 1;
+
+      body.innerHTML = toolData.tools
+        .map(
+          (t) => `
+          <tr class="tool-row" onclick="loadToolDetails('${escapeHtml(t.tool)}', this)">
+            <td>${escapeHtml(t.tool)}</td>
+            <td class="bar-cell">
+              <div class="bar" style="width: ${(t.count / maxCount) * 100}%"></div>
+              <span class="bar-count">${t.count}</span>
+            </td>
+          </tr>
+          <tr class="tool-detail" id="detail-${escapeHtml(t.tool)}">
+            <td colspan="2" id="detail-content-${escapeHtml(t.tool)}">Loading...</td>
+          </tr>`
+        )
+        .join("");
+    }
+
+    async function loadToolDetails(toolName, row) {
+      const detailRow = document.getElementById("detail-" + toolName);
+      if (!detailRow) return;
+
+      const isVisible = detailRow.style.display === "table-row";
+      detailRow.style.display = isVisible ? "none" : "table-row";
+      if (isVisible) return;
+
+      const contentCell = document.getElementById("detail-content-" + toolName);
+      contentCell.textContent = "Loading...";
+
+      try {
+        const calls = await fetch("/api/tool-details/" + encodeURIComponent(toolName)).then((r) => r.json());
+        if (!calls.length) {
+          contentCell.textContent = "No details available.";
+          return;
+        }
+
+        contentCell.innerHTML = calls
+          .slice(0, 200)
+          .map((c) => {
+            const badge = c.success === true
+              ? '<span class="success-badge pass">✓</span>'
+              : c.success === false
+                ? '<span class="success-badge fail">✗</span>'
+                : '<span class="success-badge">—</span>';
+            const args = Object.entries(c.arguments || {})
+              .filter(([, v]) => v != null)
+              .map(([k, v]) => `${k}: ${escapeHtml(String(v))}`)
+              .join(" | ");
+            return `<div style="padding:4px 0;border-bottom:1px solid #21262d">
+              ${badge} <span style="color:#8b949e">${escapeHtml(c.timestamp?.slice(0, 19) || "")}</span>
+              <span style="color:#58a6ff">${escapeHtml(c.project)}</span>
+              ${args ? `<br><span style="color:#c9d1d9;padding-left:24px">${args}</span>` : ""}
+            </div>`;
+          })
+          .join("");
+      } catch {
+        contentCell.textContent = "Error loading details.";
+      }
+    }
+
+    function renderProjects(projects) {
+      const body = document.getElementById("projects-body");
+      body.innerHTML = projects
+        .map(
+          (p) => `<tr>
+            <td title="${escapeHtml(p.fullPath)}">${escapeHtml(p.name)}</td>
+            <td>${p.sessions}</td>
+            <td>${p.premiumRequests}</td>
+            <td>${p.lastSeen ? p.lastSeen.slice(0, 10) : "—"}</td>
+          </tr>`
+        )
+        .join("");
+    }
+
+    function renderHistory(history) {
+      const container = document.getElementById("history-section");
+      if (!history.length) {
+        container.innerHTML = '<div class="empty-state">No command history found.</div>';
+        return;
+      }
+      container.innerHTML = history
+        .map(
+          (h) =>
+            `<div class="history-item">${escapeHtml(h.display)}</div>`
+        )
+        .join("");
+    }
+
+    function exportToolCalls() {
+      if (!currentToolData) return;
+      const lines = currentToolData.tools.map(
+        (t) => `${t.tool}: ${t.count} calls`
+      );
+      const blob = new Blob([lines.join("\n")], { type: "text/plain" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "copilot-tool-calls.txt";
+      a.click();
+    }
+
+    async function load() {
+      try {
+        const [stats, history, toolData, projects, costData] =
+          await Promise.all([
+            fetch("/api/stats").then((r) => r.json()),
+            fetch("/api/history").then((r) => r.json()),
+            fetch("/api/tool-calls").then((r) => r.json()),
+            fetch("/api/projects").then((r) => r.json()),
+            fetch("/api/daily-costs").then((r) => r.json()),
+          ]);
+
+        renderSummary(costData, stats);
+        renderCacheCards(costData);
+        renderDailyCosts(costData);
+        renderTools(toolData);
+        renderProjects(projects);
+        renderHistory(history);
+      } catch (err) {
+        document.body.innerHTML +=
+          '<div class="empty-state">Error loading dashboard: ' +
+          escapeHtml(err.message) +
+          "</div>";
+      }
+    }
+
+    load();
   </script>
 </body>
 </html>
