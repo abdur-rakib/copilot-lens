@@ -848,6 +848,82 @@
     @media (max-width: 768px) {
       .streak-cards, .productivity-cards { flex-direction: column; }
     }
+
+    /* Source filter tabs */
+    .source-tabs {
+      display: flex;
+      gap: 0;
+      margin-bottom: 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      width: fit-content;
+    }
+
+    .source-tab {
+      padding: 6px 16px;
+      font-size: 0.75rem;
+      font-family: inherit;
+      cursor: pointer;
+      background: var(--bg-secondary);
+      color: var(--text-muted);
+      border: none;
+      border-right: 1px solid var(--border);
+      transition: all 0.2s;
+    }
+
+    .source-tab:last-child { border-right: none; }
+    .source-tab:hover { background: var(--bg-tertiary); color: var(--text); }
+    .source-tab.active { background: var(--accent-dark); color: #fff; }
+
+    /* Source badges */
+    .source-badge {
+      display: inline-block;
+      font-size: 0.65rem;
+      font-weight: 600;
+      padding: 1px 6px;
+      border-radius: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .source-badge.cli { background: #1f6feb33; color: var(--accent); border: 1px solid var(--accent-dark); }
+    .source-badge.vscode { background: #8b5cf633; color: #a78bfa; border: 1px solid #7c3aed; }
+
+    /* Source pie chart */
+    .source-chart-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+    }
+
+    .source-chart-container canvas { width: 60px !important; height: 60px !important; }
+
+    .source-legend {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .source-legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 3px 0;
+    }
+
+    .source-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .source-dot.cli { background: #58a6ff; }
+    .source-dot.vscode { background: #a78bfa; }
   </style>
 </head>
 <body>
@@ -890,6 +966,11 @@
     <div class="cache-card"><div class="skeleton skeleton-card"></div></div>
     <div class="cache-card"><div class="skeleton skeleton-card"></div></div>
     <div class="cache-card"><div class="skeleton skeleton-card"></div></div>
+  </div>
+
+  <div class="source-chart-container" id="source-chart-container" style="display:none">
+    <canvas id="source-pie" width="60" height="60"></canvas>
+    <div class="source-legend" id="source-legend"></div>
   </div>
 
   <h2>Model Breakdown</h2>
@@ -994,6 +1075,11 @@
   <div id="projects-pagination" class="pagination"></div>
 
   <h2>Sessions</h2>
+  <div class="source-tabs" id="source-tabs">
+    <button class="source-tab active" onclick="setSourceFilter('all')">All</button>
+    <button class="source-tab" onclick="setSourceFilter('cli')">CLI</button>
+    <button class="source-tab" onclick="setSourceFilter('vscode')">VS Code</button>
+  </div>
   <div class="session-search">
     <input type="text" id="session-search-input" placeholder="Search sessions by name, project, or branch..." oninput="filterSessions()">
     <span class="result-count" id="session-result-count"></span>
@@ -1001,6 +1087,7 @@
   <table>
     <thead>
       <tr>
+        <th>Source</th>
         <th>Name</th>
         <th>Project</th>
         <th>Branch</th>
@@ -1009,10 +1096,10 @@
       </tr>
     </thead>
     <tbody id="sessions-body">
-      <tr><td colspan="5"><div class="skeleton skeleton-row"></div></td></tr>
-      <tr><td colspan="5"><div class="skeleton skeleton-row"></div></td></tr>
-      <tr><td colspan="5"><div class="skeleton skeleton-row"></div></td></tr>
-      <tr><td colspan="5"><div class="skeleton skeleton-row"></div></td></tr>
+      <tr><td colspan="6"><div class="skeleton skeleton-row"></div></td></tr>
+      <tr><td colspan="6"><div class="skeleton skeleton-row"></div></td></tr>
+      <tr><td colspan="6"><div class="skeleton skeleton-row"></div></td></tr>
+      <tr><td colspan="6"><div class="skeleton skeleton-row"></div></td></tr>
     </tbody>
   </table>
 
@@ -1564,6 +1651,18 @@
     }
 
     let sessionsData = [];
+    let currentSourceFilter = 'all';
+
+    function setSourceFilter(source) {
+      currentSourceFilter = source;
+      document.querySelectorAll('.source-tab').forEach(tab => {
+        tab.classList.toggle('active', 
+          (source === 'all' && tab.textContent === 'All') ||
+          (source === 'cli' && tab.textContent === 'CLI') ||
+          (source === 'vscode' && tab.textContent === 'VS Code'));
+      });
+      filterSessions();
+    }
 
     function renderSessions(sessions) {
       sessionsData = sessions;
@@ -1572,33 +1671,87 @@
 
     function filterSessions() {
       const query = (document.getElementById('session-search-input')?.value || '').toLowerCase();
-      const filtered = sessionsData.filter(s => {
-        if (!query) return true;
-        const name = (s.name || '').toLowerCase();
-        const project = (s.cwd || '').toLowerCase();
-        const branch = (s.branch || '').toLowerCase();
-        return name.includes(query) || project.includes(query) || branch.includes(query);
-      });
+      
+      let filtered = sessionsData;
+      
+      // Source filter
+      if (currentSourceFilter !== 'all') {
+        filtered = filtered.filter(s => s.source === currentSourceFilter);
+      }
+      
+      // Text search
+      if (query) {
+        filtered = filtered.filter(s => {
+          const name = (s.title || s.name || '').toLowerCase();
+          const project = (s.project || s.cwd || '').toLowerCase();
+          const branch = (s.branch || '').toLowerCase();
+          return name.includes(query) || project.includes(query) || branch.includes(query);
+        });
+      }
 
       const countEl = document.getElementById('session-result-count');
       if (countEl) {
-        countEl.textContent = query ? `Showing ${filtered.length} of ${sessionsData.length}` : `${sessionsData.length} sessions`;
+        countEl.textContent = query || currentSourceFilter !== 'all' 
+          ? `Showing ${filtered.length} of ${sessionsData.length}` 
+          : `${sessionsData.length} sessions`;
       }
 
       const body = document.getElementById('sessions-body');
       if (!body) return;
 
       body.innerHTML = filtered.map(s => {
-        const project = shortName(s.cwd);
-        const created = s.createdAt ? s.createdAt.slice(0, 10) : '—';
-        return `<tr class="session-row" onclick="openSession('${escapeHtml(s.id)}')">
-          <td title="${escapeHtml(s.name)}">${escapeHtml((s.name || 'Untitled').slice(0, 50))}</td>
-          <td title="${escapeHtml(s.cwd)}">${escapeHtml(project)}</td>
+        const name = s.title || s.name || 'Untitled';
+        const project = s.project || shortName(s.cwd);
+        const created = s.startTime ? new Date(s.startTime).toISOString().slice(0, 10) : (s.createdAt ? s.createdAt.slice(0, 10) : '—');
+        const premium = s.source === 'vscode' ? '<span style="color:var(--text-muted)">N/A</span>' : (s.premiumRequests || 0);
+        const badge = s.source === 'vscode' 
+          ? '<span class="source-badge vscode">VS Code</span>'
+          : '<span class="source-badge cli">CLI</span>';
+        const clickHandler = s.source === 'cli' ? `onclick="openSession('${escapeHtml(s.id)}')"` : '';
+        const cursorStyle = s.source === 'cli' ? 'cursor:pointer' : '';
+        return `<tr class="session-row" ${clickHandler} style="${cursorStyle}">
+          <td>${badge}</td>
+          <td title="${escapeHtml(name)}">${escapeHtml(name.slice(0, 50))}</td>
+          <td>${escapeHtml(project || '—')}</td>
           <td>${escapeHtml(s.branch || '—')}</td>
-          <td>${s.premiumRequests || 0}</td>
+          <td>${premium}</td>
           <td>${created}</td>
         </tr>`;
       }).join('');
+    }
+
+    function renderSourceChart(breakdown) {
+      const container = document.getElementById('source-chart-container');
+      if (!container || (!breakdown.cli && !breakdown.vscode)) return;
+      container.style.display = 'flex';
+      
+      const legend = document.getElementById('source-legend');
+      const total = (breakdown.cli || 0) + (breakdown.vscode || 0);
+      legend.innerHTML = `
+        <div class="source-legend-item"><span class="source-dot cli"></span> CLI: ${breakdown.cli || 0} sessions (${total ? Math.round((breakdown.cli || 0) / total * 100) : 0}%)</div>
+        <div class="source-legend-item"><span class="source-dot vscode"></span> VS Code: ${breakdown.vscode || 0} sessions (${total ? Math.round((breakdown.vscode || 0) / total * 100) : 0}%)</div>
+        <div class="source-legend-item" style="margin-top:4px; font-weight:600; color:var(--text)">Total: ${total} sessions</div>
+      `;
+      
+      const ctx = document.getElementById('source-pie');
+      if (ctx && window.Chart) {
+        new Chart(ctx, {
+          type: 'doughnut',
+          data: {
+            labels: ['CLI', 'VS Code'],
+            datasets: [{
+              data: [breakdown.cli || 0, breakdown.vscode || 0],
+              backgroundColor: ['#58a6ff', '#a78bfa'],
+              borderWidth: 0
+            }]
+          },
+          options: {
+            plugins: { legend: { display: false } },
+            cutout: '60%',
+            responsive: false
+          }
+        });
+      }
     }
 
     function shortName(cwdPath) {
@@ -1902,7 +2055,7 @@
             fetch(`/api/tool-calls?page=${paginationState.tools.page}&limit=${paginationState.tools.limit}`).then((r) => r.json()),
             fetch(`/api/projects?page=${paginationState.projects.page}&limit=${paginationState.projects.limit}`).then((r) => r.json()),
             fetch(`/api/daily-costs?page=${paginationState.daily.page}&limit=${paginationState.daily.limit}`).then((r) => r.json()),
-            fetch("/api/sessions").then((r) => r.json()),
+            fetch("/api/unified-sessions?limit=200").then((r) => r.json()),
             fetch("/api/activity").then((r) => r.json()),
           ]);
 
@@ -1915,6 +2068,7 @@
         renderProjects(projects);
         renderHistory(history);
         renderSessions(sessions.data || sessions);
+        if (sessions.breakdown) renderSourceChart(sessions.breakdown);
         renderActivity(activity);
 
         const el = document.getElementById("last-updated");
