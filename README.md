@@ -1,7 +1,6 @@
 # copilot-lens 🔍
 
-Local dashboard for visualizing **GitHub Copilot CLI** usage statistics.
-Zero-install, privacy-first — your data never leaves your machine.
+🔭 Local dashboard for visualizing **GitHub Copilot CLI** usage — sessions, token counts, cost estimates, tool analytics & more. Zero-install, privacy-first — your data never leaves your machine.
 
 ![Copilot Lens Dashboard](docs/screenshots/dashboard.png)
 
