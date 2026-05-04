@@ -661,8 +661,42 @@
     <tbody id="projects-body"></tbody>
   </table>
 
+  <h2>Sessions</h2>
+  <div class="session-search">
+    <input type="text" id="session-search-input" placeholder="Search sessions by name, project, or branch..." oninput="filterSessions()">
+    <span class="result-count" id="session-result-count"></span>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Project</th>
+        <th>Branch</th>
+        <th>Premium Req</th>
+        <th>Created</th>
+      </tr>
+    </thead>
+    <tbody id="sessions-body"></tbody>
+  </table>
+
   <h2>Prompt History</h2>
   <div id="history-section" class="history-list"></div>
+
+  <!-- Session detail modal -->
+  <div class="modal-backdrop" id="session-modal" onclick="closeModalBackdrop(event)">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h2 id="modal-title">Session Detail</h2>
+          <div class="meta" id="modal-meta"></div>
+        </div>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="modal-body">
+        <div class="modal-loading">Loading...</div>
+      </div>
+    </div>
+  </div>
 
   <script>
     let usageChartInstance = null;
