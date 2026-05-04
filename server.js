@@ -523,6 +523,144 @@ app.get("/api/tool-details/:toolName", async (req, res) => {
   }
 });
 
+app.get("/api/session/:id", async (req, res) => {
+  try {
+    const sessionId = req.params.id;
+    const sessionDir = path.join(SESSION_STATE_DIR, sessionId);
+
+    if (!fs.existsSync(sessionDir)) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+
+    const ws = readWorkspace(sessionDir);
+    if (!ws) {
+      return res.status(404).json({ error: "Session workspace not found" });
+    }
+
+    const events = await parseEventsJsonl(sessionDir, [
+      "user.message",
+      "tool.execution_start",
+      "tool.execution_complete",
+      "session.shutdown",
+    ]);
+
+    // Build timeline
+    const timeline = [];
+    for (const event of events) {
+      const entry = { type: event.type, timestamp: event.timestamp || "" };
+
+      if (event.type === "user.message") {
+        const msg = event.data?.message || event.data?.content || "";
+        entry.content = msg.slice(0, 200);
+      } else if (event.type === "tool.execution_start") {
+        const args = event.data?.arguments || {};
+        entry.tool = event.data?.toolName || event.data?.tool || "unknown";
+        entry.toolCallId = event.data?.toolCallId || "";
+        switch (entry.tool) {
+          case "bash":
+            entry.detail = args.command ? args.command.slice(0, 120) : (args.description || "");
+            break;
+          case "read": case "edit": case "create":
+            entry.detail = args.path || args.file_path || "";
+            break;
+          case "grep":
+            entry.detail = args.pattern || "";
+            break;
+          case "glob":
+            entry.detail = args.pattern || "";
+            break;
+          case "task":
+            entry.detail = args.description || args.agent_type || "";
+            break;
+          default:
+            entry.detail = JSON.stringify(args).slice(0, 100);
+        }
+      } else if (event.type === "tool.execution_complete") {
+        entry.tool = event.data?.toolName || event.data?.tool || "";
+        entry.toolCallId = event.data?.toolCallId || "";
+        entry.success = event.data?.success ?? null;
+      } else if (event.type === "session.shutdown") {
+        entry.premiumRequests = event.data?.totalPremiumRequests || 0;
+      }
+
+      timeline.push(entry);
+    }
+
+    // Build cost breakdown
+    const shutdowns = events.filter((e) => e.type === "session.shutdown");
+    const models = {};
+    let totalPremium = 0;
+
+    for (const event of shutdowns) {
+      const d = event.data || {};
+      totalPremium += d.totalPremiumRequests || 0;
+      const metrics = d.modelMetrics || {};
+      for (const [model, info] of Object.entries(metrics)) {
+        if (!models[model]) {
+          models[model] = { requests: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0 };
+        }
+        models[model].requests += info.requests?.count || 0;
+        const usage = info.usage || {};
+        models[model].inputTokens += usage.inputTokens || 0;
+        models[model].outputTokens += usage.outputTokens || 0;
+        models[model].cacheReadTokens += usage.cacheReadTokens || 0;
+        models[model].cacheWriteTokens += usage.cacheWriteTokens || 0;
+        models[model].reasoningTokens += usage.reasoningTokens || 0;
+      }
+    }
+
+    // Compute per-model cost
+    for (const info of Object.values(models)) {
+      info.estimatedCost =
+        Math.round(
+          ((info.inputTokens * RATES.input) +
+          (info.outputTokens * RATES.output) +
+          (info.cacheReadTokens * RATES.cacheRead) +
+          (info.cacheWriteTokens * RATES.cacheCreate)) * 10000
+        ) / 10000;
+    }
+
+    const estimatedTotal = Object.values(models).reduce((sum, m) => sum + m.estimatedCost, 0);
+
+    // Duration
+    let duration = "";
+    if (ws.created_at && ws.updated_at) {
+      const ms = new Date(ws.updated_at) - new Date(ws.created_at);
+      if (ms > 0) {
+        const mins = Math.floor(ms / 60000);
+        if (mins >= 60) {
+          duration = Math.floor(mins / 60) + "h " + (mins % 60) + "m";
+        } else {
+          duration = mins + "m";
+        }
+      }
+    }
+
+    // Code changes from last shutdown
+    const lastShutdown = shutdowns[shutdowns.length - 1]?.data || {};
+    const codeChanges = lastShutdown.codeChanges || { linesAdded: 0, linesRemoved: 0 };
+
+    res.json({
+      id: sessionId,
+      name: ws.name || ws.summary || "Untitled",
+      cwd: ws.cwd || "",
+      branch: ws.branch || "",
+      createdAt: ws.created_at || "",
+      updatedAt: ws.updated_at || "",
+      duration,
+      codeChanges,
+      cost: {
+        estimatedTotal: Math.round(estimatedTotal * 100) / 100,
+        premiumRequests: Math.round(totalPremium * 100) / 100,
+        models,
+      },
+      timeline,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`copilot-lens running at http://localhost:${PORT}`);
   console.log(`Reading data from: ${COPILOT_DIR}`);
