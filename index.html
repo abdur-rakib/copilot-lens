@@ -463,6 +463,11 @@
     </table>
   </div>
 
+  <h2>Usage Trends</h2>
+  <div class="chart-card">
+    <canvas id="usage-chart" height="120"></canvas>
+  </div>
+
   <h2>Tool Call Analytics <button class="export-btn" onclick="exportToolCalls()">Export</button></h2>
   <table id="tool-calls-table">
     <thead>
@@ -699,6 +704,90 @@
       header.classList.toggle("collapsed", !hidden);
     }
 
+    function getChartTextColor() {
+      return getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim() || '#8b949e';
+    }
+
+    function getChartGridColor() {
+      return getComputedStyle(document.documentElement).getPropertyValue('--bg-tertiary').trim() || '#21262d';
+    }
+
+    function renderUsageChart(costData) {
+      const days = [...costData.days].reverse(); // chronological order
+      const labels = days.map(d => d.date.slice(5)); // MM-DD
+      const textColor = getChartTextColor();
+      const gridColor = getChartGridColor();
+
+      if (usageChartInstance) { usageChartInstance.destroy(); usageChartInstance = null; }
+
+      const ctx = document.getElementById('usage-chart');
+      if (!ctx) return;
+
+      usageChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Sessions',
+              data: days.map(d => d.sessions),
+              borderColor: '#58a6ff',
+              backgroundColor: 'rgba(88,166,255,0.1)',
+              tension: 0.3,
+              yAxisID: 'y',
+              pointRadius: 3,
+            },
+            {
+              label: 'Messages',
+              data: days.map(d => d.messages),
+              borderColor: '#3fb950',
+              backgroundColor: 'rgba(63,185,80,0.1)',
+              tension: 0.3,
+              yAxisID: 'y1',
+              pointRadius: 3,
+            },
+            {
+              label: 'Tool Calls',
+              data: days.map(d => d.toolCalls),
+              borderColor: '#d29922',
+              backgroundColor: 'rgba(210,153,34,0.1)',
+              tension: 0.3,
+              yAxisID: 'y1',
+              pointRadius: 3,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: {
+              position: 'top',
+              labels: { color: textColor, font: { size: 11 }, boxWidth: 12 },
+            },
+          },
+          scales: {
+            x: {
+              ticks: { color: textColor, font: { size: 10 } },
+              grid: { color: gridColor },
+            },
+            y: {
+              position: 'left',
+              title: { display: true, text: 'Sessions', color: textColor, font: { size: 10 } },
+              ticks: { color: textColor, font: { size: 10 } },
+              grid: { color: gridColor },
+            },
+            y1: {
+              position: 'right',
+              title: { display: true, text: 'Messages / Tool Calls', color: textColor, font: { size: 10 } },
+              ticks: { color: textColor, font: { size: 10 } },
+              grid: { drawOnChartArea: false },
+            },
+          },
+        },
+      });
+    }
+
     function renderModelBreakdown(stats, rates) {
       const body = document.getElementById("model-breakdown-body");
       if (!body) return;
@@ -856,6 +945,7 @@
         renderSummary(costData, stats);
         renderCacheCards(costData);
         renderModelBreakdown(stats, costData.rates);
+        renderUsageChart(costData);
         renderDailyCosts(costData);
         renderTools(toolData);
         renderProjects(projects);
