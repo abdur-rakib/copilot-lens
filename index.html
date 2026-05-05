@@ -1289,6 +1289,11 @@
       };
       const t = costData.totals;
 
+      // Detect if today's data is from an active session (no token data yet)
+      const todayIsActive = todayData.sessions > 0 &&
+        (todayData.input + todayData.cacheRead + todayData.cacheWrite) === 0 &&
+        Object.keys(todayData.models || {}).length === 0;
+
       const todayHitRate = pct(
         todayData.cacheRead,
         todayData.input + todayData.cacheRead + todayData.cacheWrite
@@ -1304,17 +1309,19 @@
         { label: "Tool Calls", value: todayData.toolCalls },
         {
           label: "Premium Requests",
-          value: todayData.premiumRequests,
-          cls: "highlight",
+          value: todayIsActive ? "—" : todayData.premiumRequests,
+          cls: todayIsActive ? "" : "highlight",
           tip: "Tracked by Copilot CLI — recorded in session.shutdown events. Not calculated by copilot-lens.",
         },
         {
           label: "Est. Cost",
-          value: "$" + todayData.estimatedCost.toFixed(2),
-          cls: "orange",
-          tip: "Estimated from token counts × configurable rates (default: AWS Bedrock ap-southeast-2). Not official Copilot billing.",
+          value: todayIsActive ? "—" : "$" + todayData.estimatedCost.toFixed(2),
+          cls: todayIsActive ? "" : "orange",
+          tip: todayIsActive
+            ? "Session still active — cost data available after session ends."
+            : "Estimated from token counts × configurable rates (default: AWS Bedrock ap-southeast-2). Not official Copilot billing.",
         },
-        { label: "Cache Hit Rate", value: todayHitRate, cls: "green" },
+        { label: "Cache Hit Rate", value: todayIsActive ? "—" : todayHitRate, cls: "green" },
       ]);
       document.getElementById("today-stats").innerHTML +=
         `<div class="models-list">${topModels(todayData.models, 3)}</div>`;
@@ -1393,16 +1400,22 @@
           const hitRate = totalInput
             ? ((d.cacheRead / totalInput) * 100).toFixed(1) + "%"
             : "—";
+          // Active session: no shutdown event yet, so no token/cost data
+          const isActive = totalInput === 0 && d.premiumRequests === 0 && Object.keys(d.models || {}).length === 0;
+          const na = `<span style="color:var(--text-muted)">—</span>`;
+          const activeBadge = isActive
+            ? `<span style="font-size:0.65rem;background:var(--green);color:#000;padding:1px 5px;border-radius:8px;margin-left:4px;opacity:0.8">active</span>`
+            : '';
           return `<tr>
-            <td>${d.date}</td>
+            <td>${d.date}${activeBadge}</td>
             <td>${d.sessions}</td>
             <td>${d.messages}</td>
             <td>${d.toolCalls}</td>
-            <td>${fmt(d.cacheRead)}</td>
-            <td>${fmt(d.cacheWrite)}</td>
-            <td>${hitRate}</td>
-            <td>${d.premiumRequests}</td>
-            <td>$${d.estimatedCost.toFixed(2)}</td>
+            <td>${isActive ? na : fmt(d.cacheRead)}</td>
+            <td>${isActive ? na : fmt(d.cacheWrite)}</td>
+            <td>${isActive ? na : hitRate}</td>
+            <td>${isActive ? na : d.premiumRequests}</td>
+            <td>${isActive ? na : '$' + d.estimatedCost.toFixed(2)}</td>
           </tr>`;
         })
         .join("");
