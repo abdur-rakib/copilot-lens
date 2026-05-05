@@ -281,6 +281,7 @@ app.get("/api/daily-costs", async (req, res) => {
 
       let messages = 0;
       let toolCalls = 0;
+      let hasShutdown = false;
 
       for (const event of events) {
         if (event.type === "user.message") {
@@ -288,6 +289,7 @@ app.get("/api/daily-costs", async (req, res) => {
         } else if (event.type === "tool.execution_start") {
           toolCalls++;
         } else if (event.type === "session.shutdown") {
+          hasShutdown = true;
           const d = event.data || {};
           const day = event.timestamp
             ? event.timestamp.slice(0, 10)
@@ -328,6 +330,28 @@ app.get("/api/daily-costs", async (req, res) => {
             daily[day].reasoningTokens += usage.reasoningTokens || 0;
           }
         }
+      }
+
+      // Include active sessions (no shutdown yet) using workspace.yaml date
+      if (!hasShutdown && sessionDay) {
+        if (!daily[sessionDay]) {
+          daily[sessionDay] = {
+            date: sessionDay,
+            sessions: 0,
+            messages: 0,
+            toolCalls: 0,
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            reasoningTokens: 0,
+            premiumRequests: 0,
+            models: {},
+          };
+        }
+        daily[sessionDay].sessions++;
+        daily[sessionDay].messages += messages;
+        daily[sessionDay].toolCalls += toolCalls;
       }
     }
 
@@ -857,9 +881,13 @@ app.get("/api/activity", async (req, res) => {
       longestStreak = Math.max(longestStreak, tempStreak);
     }
 
-    // Current streak: walk backwards from today
+    // Current streak: walk backwards from today or yesterday (if today has no activity yet)
     const todayDate = new Date(today);
     let checkDate = new Date(todayDate);
+    if (!days[today]) {
+      // Today hasn't started yet — check if yesterday keeps the streak alive
+      checkDate.setDate(checkDate.getDate() - 1);
+    }
     while (true) {
       const key = checkDate.toISOString().slice(0, 10);
       if (days[key]) {
