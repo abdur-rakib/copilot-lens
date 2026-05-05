@@ -77,8 +77,74 @@
       background: var(--bg-secondary);
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 16px;
+      padding: 20px;
     }
+
+    .summary-panel#today-panel {
+      border: 2px solid var(--accent);
+    }
+
+    .summary-panel-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .summary-panel-header .panel-title {
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 5px 12px;
+      border-radius: 12px;
+      display: inline-block;
+    }
+
+    .summary-panel#today-panel .panel-title {
+      background: var(--accent);
+      color: var(--bg);
+    }
+
+    .summary-panel#alltime-panel .panel-title {
+      background: var(--bg-tertiary);
+      color: var(--text);
+    }
+
+    .summary-panel-header .panel-date {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    .metric-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .metric-label {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .metric-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .metric-value.green { color: var(--green); }
+    .metric-value.orange { color: var(--orange); }
+    .metric-value.highlight { color: var(--accent); }
 
     .summary-panel h3 {
       font-size: 0.9rem;
@@ -103,7 +169,7 @@
 
     .cache-cards {
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
+      grid-template-columns: repeat(4, 1fr);
       gap: 12px;
       margin-bottom: 16px;
     }
@@ -223,6 +289,9 @@
     .models-list {
       margin-top: 8px;
       font-size: 0.8rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .model-badge {
@@ -463,8 +532,17 @@
       display: grid;
       grid-template-columns: 1fr 240px;
       gap: 16px;
-      align-items: start;
+      align-items: stretch;
       margin-bottom: 16px;
+    }
+
+    .model-breakdown-layout .chart-card {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
     }
 
     /* User info chip */
@@ -975,7 +1053,10 @@
   <div id="summary-section">
     <div class="summary-grid">
       <div class="summary-panel" id="today-panel">
-        <h3>Today</h3>
+        <div class="summary-panel-header">
+          <span class="panel-title">TODAY</span>
+          <span class="panel-date" id="today-date">2026-04-30</span>
+        </div>
         <div id="today-stats">
           <div class="skeleton skeleton-text" style="width: 80%;"></div>
           <div class="skeleton skeleton-text" style="width: 60%;"></div>
@@ -984,7 +1065,10 @@
         </div>
       </div>
       <div class="summary-panel" id="alltime-panel">
-        <h3>All Time</h3>
+        <div class="summary-panel-header">
+          <span class="panel-title">ALL TIME</span>
+          <span class="panel-date" id="alltime-date">Since 2026-03-31</span>
+        </div>
         <div id="alltime-stats">
           <div class="skeleton skeleton-text" style="width: 80%;"></div>
           <div class="skeleton skeleton-text" style="width: 60%;"></div>
@@ -995,36 +1079,12 @@
     </div>
   </div>
 
+  <h2>Cache Performance</h2>
   <div id="cache-cards" class="cache-cards">
     <div class="cache-card"><div class="skeleton skeleton-card"></div></div>
     <div class="cache-card"><div class="skeleton skeleton-card"></div></div>
     <div class="cache-card"><div class="skeleton skeleton-card"></div></div>
     <div class="cache-card"><div class="skeleton skeleton-card"></div></div>
-  </div>
-
-  <h2>Model Breakdown</h2>
-  <div class="model-breakdown-layout" id="model-breakdown-layout">
-    <table id="model-breakdown-table">
-      <thead>
-        <tr>
-          <th>Model</th>
-          <th>Requests</th>
-          <th>Input Tokens</th>
-          <th>Output Tokens</th>
-          <th>Cache Read</th>
-          <th>Cache Write</th>
-          <th>Est. Cost</th>
-        </tr>
-      </thead>
-      <tbody id="model-breakdown-body">
-        <tr><td colspan="7"><div class="skeleton skeleton-row"></div></td></tr>
-        <tr><td colspan="7"><div class="skeleton skeleton-row"></div></td></tr>
-        <tr><td colspan="7"><div class="skeleton skeleton-row"></div></td></tr>
-      </tbody>
-    </table>
-    <div class="chart-card" style="text-align:center">
-      <canvas id="model-donut" width="200" height="200"></canvas>
-    </div>
   </div>
 
   <h2>Daily Breakdown</h2>
@@ -1054,18 +1114,30 @@
     <div id="daily-pagination" class="pagination"></div>
   </div>
 
-  <h2>Activity & Streaks</h2>
-  <div class="streak-cards" id="streak-cards"></div>
-  <div class="heatmap-container">
-    <div class="heatmap-toggles">
-      <button class="heatmap-toggle active" onclick="setHeatmapMetric('sessions', this)">Sessions</button>
-      <button class="heatmap-toggle" onclick="setHeatmapMetric('messages', this)">Messages</button>
-      <button class="heatmap-toggle" onclick="setHeatmapMetric('toolCalls', this)">Tool Calls</button>
-      <button class="heatmap-toggle" onclick="setHeatmapMetric('premiumRequests', this)">Premium Req</button>
+  <h2>Model Breakdown</h2>
+  <div class="model-breakdown-layout" id="model-breakdown-layout">
+    <table id="model-breakdown-table">
+      <thead>
+        <tr>
+          <th>Model</th>
+          <th>Requests</th>
+          <th>Input Tokens</th>
+          <th>Output Tokens</th>
+          <th>Cache Read</th>
+          <th>Cache Write</th>
+          <th>Est. Cost</th>
+        </tr>
+      </thead>
+      <tbody id="model-breakdown-body">
+        <tr><td colspan="7"><div class="skeleton skeleton-row"></div></td></tr>
+        <tr><td colspan="7"><div class="skeleton skeleton-row"></div></td></tr>
+        <tr><td colspan="7"><div class="skeleton skeleton-row"></div></td></tr>
+      </tbody>
+    </table>
+    <div class="chart-card">
+      <canvas id="model-donut" width="200" height="200"></canvas>
     </div>
-    <div class="heatmap-grid" id="heatmap-grid"></div>
   </div>
-  <div class="productivity-cards" id="productivity-cards"></div>
 
   <h2>Tool Call Analytics <button class="export-btn" onclick="exportToolCalls()">Export</button></h2>
   <table id="tool-calls-table">
@@ -1400,21 +1472,6 @@
         { value: "$" + noCacheRounded.toFixed(2), label: "Cost (no cache)" },
         { value: "$" + Math.max(0, saved).toFixed(2), label: "Savings" },
       ];
-
-      // Add source breakdown card if available
-      if (sourceBreakdown) {
-        const cli = sourceBreakdown.cli || 0;
-        const vscode = sourceBreakdown.vscode || 0;
-        const total = cli + vscode;
-        const cliPct = total > 0 ? ((cli / total) * 100).toFixed(0) : 0;
-        const vscodePct = total > 0 ? ((vscode / total) * 100).toFixed(0) : 0;
-        
-        cards.push({
-          value: `${total}`,
-          label: "Total Sessions",
-          detail: `CLI: ${cli} (${cliPct}%)<br>VS Code: ${vscode} (${vscodePct}%)`
-        });
-      }
 
       const cardsHtml = cards
         .map((c) => {
