@@ -2,7 +2,7 @@
 
 🔭 Local dashboard for visualizing **GitHub Copilot CLI** usage — sessions, token counts, cost estimates, tool analytics & more. Zero-install, privacy-first — your data never leaves your machine.
 
-![Copilot Lens Dashboard](docs/screenshots/dashboard.png)
+![Copilot Lens Dashboard](docs/screenshots/image.png)
 
 Inspired by [claude-lens](https://github.com/foyzulkarim/claude-lens).
 
@@ -47,18 +47,18 @@ COPILOT_DIR=/custom/path npx github:abdur-rakib/copilot-lens
 
 ## What You'll See
 
-| Section                  | Description                                                      |
-| ------------------------ | ---------------------------------------------------------------- |
-| **Today / All-Time**     | Sessions, messages, tool calls, premium requests, est. cost      |
-| **Cache Analytics**      | Hit rate ring, cost with/without cache, total savings            |
-| **Model Breakdown**      | Per-model token table + donut chart                              |
-| **Daily Breakdown**      | Per-day table of all metrics                                     |
-| **Usage Trends**         | Line chart — sessions, messages, tool calls over time            |
-| **Activity & Streaks**   | 🔥 Streak counters, GitHub-style contribution heatmap, productivity insights |
-| **Sessions**             | Searchable session list with click-to-drill-down modal           |
-| **Tool Analytics**       | Bar chart of tool usage with drill-down details                  |
-| **Projects**             | Activity grouped by repository                                   |
-| **Command History**      | Recent Copilot CLI commands                                      |
+| Section                | Description                                                                  |
+| ---------------------- | ---------------------------------------------------------------------------- |
+| **Today / All-Time**   | Sessions, messages, tool calls, premium requests, est. cost                  |
+| **Cache Analytics**    | Hit rate ring, cost with/without cache, total savings                        |
+| **Model Breakdown**    | Per-model token table + donut chart                                          |
+| **Daily Breakdown**    | Per-day table of all metrics                                                 |
+| **Usage Trends**       | Line chart — sessions, messages, tool calls over time                        |
+| **Activity & Streaks** | 🔥 Streak counters, GitHub-style contribution heatmap, productivity insights |
+| **Sessions**           | Searchable session list with click-to-drill-down modal                       |
+| **Tool Analytics**     | Bar chart of tool usage with drill-down details                              |
+| **Projects**           | Activity grouped by repository                                               |
+| **Command History**    | Recent Copilot CLI commands                                                  |
 
 ## Configuration
 
