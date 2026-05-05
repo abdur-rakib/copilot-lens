@@ -49,7 +49,7 @@
     h1 {
       font-size: 1.5rem;
       color: var(--accent);
-      margin-bottom: 8px;
+      margin: 0;
     }
 
     h1 .subtitle {
@@ -406,12 +406,18 @@
     }
 
     /* Refresh bar */
+    .header-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      gap: 16px;
+    }
+
     .refresh-bar {
       display: flex;
-      justify-content: flex-end;
       align-items: center;
       gap: 12px;
-      margin-bottom: 16px;
       font-size: 0.78rem;
       color: var(--text-muted);
     }
@@ -460,6 +466,28 @@
       align-items: start;
       margin-bottom: 16px;
     }
+
+    /* User info chip */
+    .user-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 10px 4px 4px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      background: var(--bg-secondary);
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      text-decoration: none;
+    }
+    .user-chip:hover { background: var(--bg-tertiary); }
+    .user-chip img {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: block;
+    }
+    .user-chip span { color: var(--text); font-weight: 500; }
 
     /* Theme toggle button */
     .theme-btn {
@@ -927,6 +955,7 @@
   </style>
 </head>
 <body>
+  <div class="header-bar">
   <h1>🔭 Copilot Lens 
     <span class="subtitle">— GitHub Copilot CLI Usage Dashboard</span>
     <span class="cost-info-icon" data-tip="💰 Cost Calculation Info&#10;&#10;Premium Requests: Tracked by Copilot CLI in session.shutdown events. Different models consume different weights (e.g., opus ~3, sonnet ~1, gpt ~0 per call).&#10;&#10;Estimated Cost: Calculated from token counts × rates (Input: $5/1M, Output: $25/1M, Cache Read: $0.5/1M, Cache Write: $6.25/1M). Default rates reflect AWS Bedrock ap-southeast-2 pricing. Not official GitHub Copilot billing.">ⓘ</span>
@@ -936,6 +965,11 @@
     <button class="theme-btn" id="theme-toggle" onclick="toggleTheme()" title="Toggle theme">🌙</button>
     <span id="last-updated">Last updated: —</span>
     <button class="refresh-btn" id="refresh-btn" onclick="cancelRefresh(); load()">↻ Refresh</button>
+    <a id="user-chip" class="user-chip" href="#" target="_blank" rel="noopener" style="display:none">
+      <img id="user-avatar" src="" alt="avatar" />
+      <span id="user-login"></span>
+    </a>
+  </div>
   </div>
 
   <div id="summary-section">
@@ -2143,7 +2177,23 @@
       }
     });
 
+    async function loadUser() {
+      try {
+        const data = await fetch('/api/user').then(r => r.json());
+        if (data.login) {
+          const chip = document.getElementById('user-chip');
+          const avatar = document.getElementById('user-avatar');
+          const loginEl = document.getElementById('user-login');
+          avatar.src = data.avatarUrl;
+          loginEl.textContent = data.login;
+          chip.href = `${data.host || 'https://github.com'}/${data.login}`;
+          chip.style.display = 'flex';
+        }
+      } catch { /* silently ignore */ }
+    }
+
     initTheme();
+    loadUser();
     load();
   </script>
 </body>

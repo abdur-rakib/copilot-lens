@@ -968,6 +968,26 @@ app.get("/api/unified-sessions", (req, res) => {
   }
 });
 
+app.get("/api/user", (req, res) => {
+  try {
+    const configPath = path.join(COPILOT_DIR, "config.json");
+    if (!fs.existsSync(configPath)) {
+      return res.json({ login: null, host: null });
+    }
+    const raw = fs.readFileSync(configPath, "utf8")
+      .replace(/^\s*\/\/.*$/gm, ""); // strip JS-style comments
+    const config = JSON.parse(raw);
+    const user = config.lastLoggedInUser || null;
+    res.json({
+      login: user?.login || null,
+      host: user?.host || null,
+      avatarUrl: user?.login ? `https://github.com/${user.login}.png?size=64` : null,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get("/api/unified-stats", (req, res) => {
   try {
     const cliSessions = getCLISessions();
